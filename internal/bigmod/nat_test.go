@@ -2,10 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package rsa
+package bigmod
 
 import (
-	"bytes"
 	"math/big"
 	"math/bits"
 	"math/rand"
@@ -16,25 +15,21 @@ import (
 
 // Generate generates an even nat. It's used by testing/quick to produce random
 // *nat values for quick.Check invocations.
-func (*nat) Generate(r *rand.Rand, size int) reflect.Value {
+func (*Nat) Generate(r *rand.Rand, size int) reflect.Value {
 	limbs := make([]uint, size)
 	for i := 0; i < size; i++ {
 		limbs[i] = uint(r.Uint64()) & ((1 << _W) - 2)
 	}
-	return reflect.ValueOf(&nat{limbs})
+	return reflect.ValueOf(&Nat{limbs})
 }
 
-func testModAddCommutative(a *nat, b *nat) bool {
-	mLimbs := make([]uint, len(a.limbs))
-	for i := 0; i < len(mLimbs); i++ {
-		mLimbs[i] = _MASK
-	}
-	m := modulusFromNat(&nat{mLimbs})
-	aPlusB := new(nat).set(a)
-	aPlusB.modAdd(b, m)
-	bPlusA := new(nat).set(b)
-	bPlusA.modAdd(a, m)
-	return aPlusB.cmpEq(bPlusA) == 1
+func testModAddCommutative(a *Nat, b *Nat) bool {
+	m := maxModulus(uint(len(a.limbs)))
+	aPlusB := new(Nat).set(a)
+	aPlusB.Add(b, m)
+	bPlusA := new(Nat).set(b)
+	bPlusA.Add(a, m)
+	return aPlusB.Equal(bPlusA) == 1
 }
 
 func TestModAddCommutative(t *testing.T) {
@@ -44,16 +39,12 @@ func TestModAddCommutative(t *testing.T) {
 	}
 }
 
-func testModSubThenAddIdentity(a *nat, b *nat) bool {
-	mLimbs := make([]uint, len(a.limbs))
-	for i := 0; i < len(mLimbs); i++ {
-		mLimbs[i] = _MASK
-	}
-	m := modulusFromNat(&nat{mLimbs})
-	original := new(nat).set(a)
-	a.modSub(b, m)
-	a.modAdd(b, m)
-	return a.cmpEq(original) == 1
+func testModSubThenAddIdentity(a *Nat, b *Nat) bool {
+	m := maxModulus(uint(len(a.limbs)))
+	original := new(Nat).set(a)
+	a.Sub(b, m)
+	a.Add(b, m)
+	return a.Equal(original) == 1
 }
 
 func TestModSubThenAddIdentity(t *testing.T) {
@@ -63,17 +54,17 @@ func TestModSubThenAddIdentity(t *testing.T) {
 	}
 }
 
-func testMontgomeryRoundtrip(a *nat) bool {
-	one := &nat{make([]uint, len(a.limbs))}
+func testMontgomeryRoundtrip(a *Nat) bool {
+	one := &Nat{make([]uint, len(a.limbs))}
 	one.limbs[0] = 1
-	aPlusOne := new(nat).set(a)
-	aPlusOne.add(1, one)
-	m := modulusFromNat(aPlusOne)
-	monty := new(nat).set(a)
+	aPlusOne := new(big.Int).SetBytes(natBytes(a))
+	aPlusOne.Add(aPlusOne, big.NewInt(1))
+	m := NewModulusFromBig(aPlusOne)
+	monty := new(Nat).set(a)
 	monty.montgomeryRepresentation(m)
-	aAgain := new(nat).set(monty)
+	aAgain := new(Nat).set(monty)
 	aAgain.montgomeryMul(monty, one, m)
-	return a.cmpEq(aAgain) == 1
+	return a.Equal(aAgain) == 1
 }
 
 func TestMontgomeryRoundtrip(t *testing.T) {
@@ -81,62 +72,6 @@ func TestMontgomeryRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-}
-
-func TestFromBig(t *testing.T) {
-	expected := []byte{0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-	theBig := new(big.Int).SetBytes(expected)
-	actual := new(nat).setBig(theBig).fillBytes(make([]byte, len(expected)))
-	if !bytes.Equal(actual, expected) {
-		t.Errorf("%+x != %+x", actual, expected)
-	}
-}
-
-func TestFillBytes(t *testing.T) {
-	xBytes := []byte{0xAA, 0xFF, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
-	x := new(nat).setBytes(xBytes)
-	for l := 20; l >= len(xBytes); l-- {
-		buf := make([]byte, l)
-		rand.Read(buf)
-		actual := x.fillBytes(buf)
-		expected := make([]byte, l)
-		copy(expected[l-len(xBytes):], xBytes)
-		if !bytes.Equal(actual, expected) {
-			t.Errorf("%d: %+v != %+v", l, actual, expected)
-		}
-	}
-	for l := len(xBytes) - 1; l >= 0; l-- {
-		(func() {
-			defer func() {
-				if recover() == nil {
-					t.Errorf("%d: expected panic", l)
-				}
-			}()
-			x.fillBytes(make([]byte, l))
-		})()
-	}
-}
-
-func TestFromBytes(t *testing.T) {
-	f := func(xBytes []byte) bool {
-		if len(xBytes) == 0 {
-			return true
-		}
-		actual := new(nat).setBytes(xBytes).fillBytes(make([]byte, len(xBytes)))
-		if !bytes.Equal(actual, xBytes) {
-			t.Errorf("%+x != %+x", actual, xBytes)
-			return false
-		}
-		return true
-	}
-
-	err := quick.Check(f, &quick.Config{})
-	if err != nil {
-		t.Error(err)
-	}
-
-	f([]byte{0xFF, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88})
-	f(bytes.Repeat([]byte{0xFF}, _W))
 }
 
 func TestShiftIn(t *testing.T) {
@@ -169,9 +104,9 @@ func TestShiftIn(t *testing.T) {
 	}}
 
 	for i, tt := range examples {
-		m := modulusFromNat(new(nat).setBytes(tt.m))
-		got := new(nat).setBytes(tt.x).expandFor(m).shiftIn(uint(tt.y), m)
-		if got.cmpEq(new(nat).setBytes(tt.expected).expandFor(m)) != 1 {
+		m := modulusFromBytes(tt.m)
+		got := natFromBytes(tt.x).ExpandFor(m).shiftIn(uint(tt.y), m)
+		if got.Equal(natFromBytes(tt.expected).ExpandFor(m)) != 1 {
 			t.Errorf("%d: got %x, expected %x", i, got, tt.expected)
 		}
 	}
@@ -182,13 +117,92 @@ func TestModulusAndNatSizes(t *testing.T) {
 	// 128 bits worth of bytes. If leading zeroes are stripped, they fit in two
 	// limbs, if they are not, they fit in three. This can be a problem because
 	// modulus strips leading zeroes and nat does not.
-	m := modulusFromNat(new(nat).setBytes([]byte{
+	m := modulusFromBytes([]byte{
 		0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}))
-	x := new(nat).setBytes([]byte{
-		0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe})
-	x.expandFor(m) // must not panic for shrinking
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	xb := []byte{0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}
+	natFromBytes(xb).ExpandFor(m) // must not panic for shrinking
+	NewNat().SetBytes(xb, m)
+}
+
+func TestSetBytes(t *testing.T) {
+	tests := []struct {
+		m, b []byte
+		fail bool
+	}{{
+		m: []byte{0xff, 0xff},
+		b: []byte{0x00, 0x01},
+	}, {
+		m:    []byte{0xff, 0xff},
+		b:    []byte{0xff, 0xff},
+		fail: true,
+	}, {
+		m: []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		b: []byte{0x00, 0x01},
+	}, {
+		m: []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		b: []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe},
+	}, {
+		m:    []byte{0xff, 0xff},
+		b:    []byte{0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		fail: true,
+	}, {
+		m:    []byte{0xff, 0xff},
+		b:    []byte{0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		fail: true,
+	}, {
+		m: []byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		b: []byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe},
+	}, {
+		m:    []byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		b:    []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe},
+		fail: true,
+	}, {
+		m:    []byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		b:    []byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		fail: true,
+	}, {
+		m:    []byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		b:    []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe},
+		fail: true,
+	}, {
+		m:    []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd},
+		b:    []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		fail: true,
+	}}
+
+	for i, tt := range tests {
+		m := modulusFromBytes(tt.m)
+		got, err := NewNat().SetBytes(tt.b, m)
+		if err != nil {
+			if !tt.fail {
+				t.Errorf("%d: unexpected error: %v", i, err)
+			}
+			continue
+		}
+		if err == nil && tt.fail {
+			t.Errorf("%d: unexpected success", i)
+			continue
+		}
+		if expected := natFromBytes(tt.b).ExpandFor(m); got.Equal(expected) != yes {
+			t.Errorf("%d: got %x, expected %x", i, got, expected)
+		}
+	}
+
+	f := func(xBytes []byte) bool {
+		m := maxModulus(uint(len(xBytes)*8/_W + 1))
+		got, err := NewNat().SetBytes(xBytes, m)
+		if err != nil {
+			return false
+		}
+		return got.Equal(natFromBytes(xBytes).ExpandFor(m)) == yes
+	}
+
+	err := quick.Check(f, &quick.Config{})
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 func TestExpand(t *testing.T) {
@@ -209,88 +223,102 @@ func TestExpand(t *testing.T) {
 		[]uint{1, 2},
 		2,
 		[]uint{1, 2},
-	}, {
-		[]uint{1, 2, 0},
-		2,
-		[]uint{1, 2},
 	}}
 
 	for i, tt := range examples {
-		got := (&nat{tt.in}).expand(tt.n)
-		if len(got.limbs) != len(tt.out) || got.cmpEq(&nat{tt.out}) != 1 {
+		got := (&Nat{tt.in}).expand(tt.n)
+		if len(got.limbs) != len(tt.out) || got.Equal(&Nat{tt.out}) != 1 {
 			t.Errorf("%d: got %x, expected %x", i, got, tt.out)
 		}
 	}
 }
 
 func TestMod(t *testing.T) {
-	m := modulusFromNat(new(nat).setBytes([]byte{0x06, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d}))
-	x := new(nat).setBytes([]byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01})
-	out := new(nat)
-	out.mod(x, m)
-	expected := new(nat).setBytes([]byte{0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09})
-	if out.cmpEq(expected) != 1 {
+	m := modulusFromBytes([]byte{0x06, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d})
+	x := natFromBytes([]byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01})
+	out := new(Nat)
+	out.Mod(x, m)
+	expected := natFromBytes([]byte{0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09})
+	if out.Equal(expected) != 1 {
 		t.Errorf("%+v != %+v", out, expected)
 	}
 }
 
 func TestModSub(t *testing.T) {
-	m := modulusFromNat(&nat{[]uint{13}})
-	x := &nat{[]uint{6}}
-	y := &nat{[]uint{7}}
-	x.modSub(y, m)
-	expected := &nat{[]uint{12}}
-	if x.cmpEq(expected) != 1 {
+	m := modulusFromBytes([]byte{13})
+	x := &Nat{[]uint{6}}
+	y := &Nat{[]uint{7}}
+	x.Sub(y, m)
+	expected := &Nat{[]uint{12}}
+	if x.Equal(expected) != 1 {
 		t.Errorf("%+v != %+v", x, expected)
 	}
-	x.modSub(y, m)
-	expected = &nat{[]uint{5}}
-	if x.cmpEq(expected) != 1 {
+	x.Sub(y, m)
+	expected = &Nat{[]uint{5}}
+	if x.Equal(expected) != 1 {
 		t.Errorf("%+v != %+v", x, expected)
 	}
 }
 
 func TestModAdd(t *testing.T) {
-	m := modulusFromNat(&nat{[]uint{13}})
-	x := &nat{[]uint{6}}
-	y := &nat{[]uint{7}}
-	x.modAdd(y, m)
-	expected := &nat{[]uint{0}}
-	if x.cmpEq(expected) != 1 {
+	m := modulusFromBytes([]byte{13})
+	x := &Nat{[]uint{6}}
+	y := &Nat{[]uint{7}}
+	x.Add(y, m)
+	expected := &Nat{[]uint{0}}
+	if x.Equal(expected) != 1 {
 		t.Errorf("%+v != %+v", x, expected)
 	}
-	x.modAdd(y, m)
-	expected = &nat{[]uint{7}}
-	if x.cmpEq(expected) != 1 {
+	x.Add(y, m)
+	expected = &Nat{[]uint{7}}
+	if x.Equal(expected) != 1 {
 		t.Errorf("%+v != %+v", x, expected)
 	}
 }
 
 func TestExp(t *testing.T) {
-	m := modulusFromNat(&nat{[]uint{13}})
-	x := &nat{[]uint{3}}
-	out := &nat{[]uint{0}}
-	out.exp(x, []byte{12}, m)
-	expected := &nat{[]uint{1}}
-	if out.cmpEq(expected) != 1 {
+	m := modulusFromBytes([]byte{13})
+	x := &Nat{[]uint{3}}
+	out := &Nat{[]uint{0}}
+	out.Exp(x, []byte{12}, m)
+	expected := &Nat{[]uint{1}}
+	if out.Equal(expected) != 1 {
 		t.Errorf("%+v != %+v", out, expected)
 	}
 }
 
-func makeBenchmarkModulus() *modulus {
-	m := make([]uint, 32)
-	for i := 0; i < 32; i++ {
-		m[i] = _MASK
-	}
-	return modulusFromNat(&nat{limbs: m})
+func natBytes(n *Nat) []byte {
+	return n.Bytes(maxModulus(uint(len(n.limbs))))
 }
 
-func makeBenchmarkValue() *nat {
+func natFromBytes(b []byte) *Nat {
+	bb := new(big.Int).SetBytes(b)
+	return NewNat().setBig(bb)
+}
+
+func modulusFromBytes(b []byte) *Modulus {
+	bb := new(big.Int).SetBytes(b)
+	return NewModulusFromBig(bb)
+}
+
+// maxModulus returns the biggest modulus that can fit in n limbs.
+func maxModulus(n uint) *Modulus {
+	m := big.NewInt(1)
+	m.Lsh(m, n*_W)
+	m.Sub(m, big.NewInt(1))
+	return NewModulusFromBig(m)
+}
+
+func makeBenchmarkModulus() *Modulus {
+	return maxModulus(32)
+}
+
+func makeBenchmarkValue() *Nat {
 	x := make([]uint, 32)
 	for i := 0; i < 32; i++ {
 		x[i] = _MASK - 1
 	}
-	return &nat{limbs: x}
+	return &Nat{limbs: x}
 }
 
 func makeBenchmarkExponent() []byte {
@@ -308,7 +336,7 @@ func BenchmarkModAdd(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		x.modAdd(y, m)
+		x.Add(y, m)
 	}
 }
 
@@ -319,7 +347,7 @@ func BenchmarkModSub(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		x.modSub(y, m)
+		x.Sub(y, m)
 	}
 }
 
@@ -352,7 +380,7 @@ func BenchmarkModMul(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		x.modMul(y, m)
+		x.Mul(y, m)
 	}
 }
 
@@ -379,6 +407,6 @@ func BenchmarkExp(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		out.exp(x, e, m)
+		out.Exp(x, e, m)
 	}
 }
