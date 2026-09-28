@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 // tlsx's part of the BoGo shim (bogo_shim_test.go, Go's, with hooks marked
@@ -86,6 +87,16 @@ func xBogoConfig(cfg *Config) {
 		cfg.SessionTicketsDisabled = true
 		cfg.Ext.ServerSessionCache = &xBogoSessionCache{m: map[string]*SessionState{}}
 		cfg.Ext.ClientSessionIDs = true
+	}
+	// Not a BoGo flag: TLSX_BOGO_MIN_KEY_UPDATE_INTERVAL runs the suite
+	// with Config.Ext.MinKeyUpdateInterval set (the shim inherits the
+	// environment), to check the option against BoGo's KeyUpdate tests.
+	if v := os.Getenv("TLSX_BOGO_MIN_KEY_UPDATE_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			log.Fatalf("TLSX_BOGO_MIN_KEY_UPDATE_INTERVAL: %v", err)
+		}
+		cfg.Ext.MinKeyUpdateInterval = d
 	}
 }
 

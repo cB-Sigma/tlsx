@@ -33,6 +33,7 @@ x_certs.go	(c)	tlsx; ASN.1 structs as in crypto/x509 (pkcs8, publicKeyInfo; Go; 
 x_config.go	(c)	tlsx
 x_conn.go	(c)	tlsx; SendKeyUpdate's send steps adapted from Go's handleKeyUpdate in conn.go (noted in the file)
 x_features_test.go	(c)	tlsx
+x_keyupdate_test.go	(c)	tlsx
 x_godebug.go	(c)	tlsx; GODEBUG settings as Go's internal/godebug reads them (own implementation)
 x_godebug_test.go	(c)	tlsx
 x_groups.go	(c)	tlsx; RFC 7919 group primes (published values, cited in the file)

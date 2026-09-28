@@ -333,6 +333,103 @@ func TestOpenSSLKeyUpdate(t *testing.T) {
 	})
 }
 
+// OpenSSL sends KeyUpdates ("k": update_not_requested) about every 600 ms
+// with no data. Go's limit on non-advancing records drops it; with
+// Config.Ext.MinKeyUpdateInterval below that period the connection
+// survives, and data still flows afterwards.
+func TestOpenSSLKeyUpdateIdle(t *testing.T) {
+	const updates = 24 // well past maxUselessRecords
+	f := pkiFiles(t)
+	// idle has p send KeyUpdates while c reads; it returns the number sent
+	// and c's read error, if c gave up.
+	idle := func(t *testing.T, p *osslProc, c *Conn) (int, error) {
+		readErr := make(chan error, 1)
+		got := make(chan struct{}, 1)
+		go func() {
+			c.SetReadDeadline(time.Now().Add(50 * time.Second))
+			buf := make([]byte, 256)
+			var in []byte
+			for {
+				n, err := c.Read(buf)
+				in = append(in, buf[:n]...)
+				if bytes.Contains(in, []byte("alive-after-updates")) {
+					got <- struct{}{}
+					return
+				}
+				if err != nil {
+					readErr <- err
+					return
+				}
+			}
+		}()
+		for i := 1; i <= updates; i++ {
+			time.Sleep(300 * time.Millisecond)
+			select {
+			case err := <-readErr:
+				return i - 1, err
+			default:
+			}
+			p.send("k")
+			time.Sleep(300 * time.Millisecond)
+		}
+		// (s_client prints KEYUPDATE, s_server prints nothing; the count
+		// Go received is checked instead.)
+		p.send("alive-after-updates")
+		select {
+		case <-got:
+			return updates, nil
+		case err := <-readErr:
+			return updates, err
+		case <-time.After(20 * time.Second):
+			t.Fatal("no data after the updates")
+		}
+		return 0, nil
+	}
+	check := func(t *testing.T, c *Conn, sent int, err error, withOption bool) {
+		t.Helper()
+		received := c.ConnectionState().Ext.KeyUpdatesReceived
+		t.Logf("OpenSSL sent %d KeyUpdates; Go received %d; read error: %v", sent, received, err)
+		if withOption {
+			if err != nil || received != updates {
+				t.Fatalf("with MinKeyUpdateInterval: %d of %d updates, %v", received, updates, err)
+			}
+			return
+		}
+		if err == nil || !strings.Contains(err.Error(), "too many non-advancing records") {
+			t.Fatalf("without MinKeyUpdateInterval the connection survived %d updates (%v)", received, err)
+		}
+		if received > maxUselessRecords {
+			t.Fatalf("without MinKeyUpdateInterval %d updates were accepted", received)
+		}
+	}
+	for _, withOption := range []bool{false, true} {
+		name := "default"
+		if withOption {
+			name = "MinKeyUpdateInterval"
+		}
+		t.Run("s_server sends, Go client, "+name, func(t *testing.T) {
+			srv, port := sServer(t, f, "rsa.pem", "rsa.key", "-tls1_3")
+			cfg := clientCfg(t)
+			if withOption {
+				cfg.Ext.MinKeyUpdateInterval = 250 * time.Millisecond
+			}
+			c := goClient(t, port, cfg)
+			sent, err := idle(t, srv, c)
+			check(t, c, sent, err, withOption)
+		})
+		t.Run("s_client sends, Go server, "+name, func(t *testing.T) {
+			cfg := serverCfg(t, testPKI(t).rsa)
+			if withOption {
+				cfg.Ext.MinKeyUpdateInterval = 250 * time.Millisecond
+			}
+			cl, c := goServer(t, cfg, append(sClientAuth(f), "-tls1_3")...)
+			cl.waitFor("Verify return code: 0")
+			sent, err := idle(t, cl, c)
+			check(t, c, sent, err, withOption)
+		})
+	}
+}
+
 func TestOpenSSLRenegotiation(t *testing.T) {
 	f := pkiFiles(t)
 	renegClient := func() *Config {

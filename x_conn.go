@@ -53,6 +53,10 @@ type connExt struct {
 
 	keyUpdatesSent, keyUpdatesReceived atomic.Uint64
 	lastKeyUpdate                      atomic.Int64 // unix nanoseconds
+	// lastTimelyKeyUpdate is when the last received KeyUpdate counted as
+	// progress (Config.Ext.MinKeyUpdateInterval), or when the handshake
+	// completed; guarded by c.in.
+	lastTimelyKeyUpdate time.Time
 
 	maxFragment    int       // record plaintext limit (max_fragment_length), 0 none
 	sessionCreated time.Time // server, TLS 1.2 resumption: the session's full handshake
@@ -119,6 +123,29 @@ func (x *connExt) keyUpdateSent(c *Conn, requested bool) {
 	c.observe(Event{Kind: EventKeyUpdateSent, Requested: requested})
 }
 
+// handshakeDone runs when a handshake completes, with c.in held.
+func (x *connExt) handshakeDone(c *Conn) {
+	x.lastTimelyKeyUpdate = c.config.time()
+}
+
+// creditTimelyKeyUpdate runs, with c.in held, after handlePostHandshakeMessage
+// has counted msg as a non-advancing record. If msg is a KeyUpdate that
+// arrived at least Config.Ext.MinKeyUpdateInterval after the previous one
+// that counted (or after the handshake), it takes the count back: the
+// update counts as progress. See ConfigExt.MinKeyUpdateInterval.
+func (x *connExt) creditTimelyKeyUpdate(c *Conn, msg any) {
+	min := c.config.Ext.MinKeyUpdateInterval
+	if _, ok := msg.(*keyUpdateMsg); !ok || min <= 0 {
+		return
+	}
+	now := c.config.time()
+	if now.Sub(x.lastTimelyKeyUpdate) < min {
+		return
+	}
+	x.lastTimelyKeyUpdate = now
+	c.retryCount--
+}
+
 func (x *connExt) keyUpdateReceived(c *Conn, requested bool) {
 	x.keyUpdatesReceived.Add(1)
 	x.lastKeyUpdate.Store(c.config.time().UnixNano())
@@ -164,10 +191,11 @@ func (x *connExt) state(c *Conn, s *ConnectionState) {
 // (ConnectionState().Ext.KeyUpdatesReceived, EventKeyUpdateReceived).
 //
 // Since Go 1.26.6 a KeyUpdate no longer counts as progress on a connection:
-// a tlsx or crypto/tls peer closes the connection ("too many non-advancing
-// records") after more than 16 post-handshake messages in a row with no
-// application data between them. Callers that update keys on a timer
-// should make sure some data flows between updates.
+// a crypto/tls peer, or a tlsx peer without Config.Ext.MinKeyUpdateInterval,
+// closes the connection ("too many non-advancing records") after more than
+// 16 post-handshake messages in a row with no application data between
+// them. Callers that update keys on a timer should make sure some data
+// flows between updates, or that the peer sets that option.
 func (c *Conn) SendKeyUpdate(requestPeerUpdate bool) error {
 	if err := c.Handshake(); err != nil {
 		return err

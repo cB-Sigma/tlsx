@@ -153,6 +153,35 @@ type ConfigExt struct {
 	// X.509 only.
 	RawPublicKeys *RawPublicKeyConfig
 
+	// MinKeyUpdateInterval, if positive, lets a TLS 1.3 peer update its
+	// keys on a timer over an idle connection.
+	//
+	// crypto/tls closes a connection with "too many non-advancing records"
+	// after more than 16 post-handshake messages in a row with no
+	// application data between them, and since Go 1.26.6 a KeyUpdate no
+	// longer resets that count: otherwise a peer could make the other side
+	// derive keys without limit. A peer that renews its keys every few
+	// minutes on a link that carries no data, as IEC 62351-3 profiles do,
+	// is then dropped at its 17th update.
+	//
+	// With MinKeyUpdateInterval set, a received KeyUpdate that arrives at
+	// least this long after the previous one that counted (or after the
+	// handshake, for the first) counts as progress: it is not added to
+	// that count. A KeyUpdate that arrives sooner counts as upstream does,
+	// so a flood is still cut off at the same limit, and the number of
+	// key derivations stays bounded by one per interval plus 16. The
+	// count is not reset, as application data resets it: other ignored
+	// messages and fast updates still add up. Times are taken from
+	// Config.Time when a record is read, so the connection must be read
+	// while the peer is idle; updates buffered while no one reads arrive
+	// together and only the first of them counts as progress.
+	//
+	// Choose it from the peer's renewal period with a margin for clock
+	// drift and network delay (for example half the period); a very
+	// short interval gives back most of the protection. Zero, the
+	// default, behaves exactly as crypto/tls.
+	MinKeyUpdateInterval time.Duration
+
 	// Observer, if set, is told about key updates and renegotiations. It
 	// runs on the goroutine doing the work, with connection locks held: it
 	// must return quickly and must not call methods of the Conn.

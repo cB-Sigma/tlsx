@@ -1356,6 +1356,7 @@ func (c *Conn) handlePostHandshakeMessage() error {
 		return err
 	}
 	c.retryCount++
+	c.x.creditTimelyKeyUpdate(c, msg) // tlsx: Config.Ext.MinKeyUpdateInterval
 	if c.retryCount > maxUselessRecords {
 		c.sendAlert(alertUnexpectedMessage)
 		return c.in.setErrorLocked(errors.New("tls: too many non-advancing records"))
@@ -1617,6 +1618,7 @@ func (c *Conn) handshakeContext(ctx context.Context) (ret error) {
 	c.handshakeErr = c.handshakeFn(handshakeCtx)
 	if c.handshakeErr == nil {
 		c.handshakes++
+		c.x.handshakeDone(c) // tlsx
 	} else {
 		// If an error occurred during the handshake try to flush the
 		// alert that might be left in the buffer.
