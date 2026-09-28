@@ -70,3 +70,10 @@ docs/upstream-commit-map.txt	(c)	tlsx; generated from git filter-repo's commit-m
 .github/workflows/ci.yml	(c)	tlsx
 .github/workflows/upstream.yml	(c)	tlsx
 x_example_test.go	(c)	tlsx
+revocation/doc.go	(c)	tlsx; package documentation
+revocation/revocation.go	(c)	tlsx; RFC 5280 CRL reason code names (published values)
+revocation/source.go	(c)	tlsx; RFC 5280 extension identifiers (published values)
+revocation/idp.go	(c)	tlsx; RFC 5280 5.2.5 issuing distribution point structure (cited in the file)
+revocation/pki_test.go	(c)	tlsx; ecdsa-with-SHA256 algorithm identifier (published value)
+revocation/revocation_test.go	(c)	tlsx
+revocation/http_test.go	(c)	tlsx

@@ -80,6 +80,13 @@ Classes: (a) Go's file, unchanged or only mechanically rewritten;
 | `prf_test.go` | (a) | Go go1.27.1 `src/crypto/tls/prf_test.go` | identical after the mechanical rewrite |
 | `quic.go` | (a) | Go go1.27.1 `src/crypto/tls/quic.go` | identical after the mechanical rewrite |
 | `quic_test.go` | (a) | Go go1.27.1 `src/crypto/tls/quic_test.go` | identical after the mechanical rewrite |
+| `revocation/doc.go` | (c) | tlsx | package documentation |
+| `revocation/http_test.go` | (c) | tlsx |  |
+| `revocation/idp.go` | (c) | tlsx | RFC 5280 5.2.5 issuing distribution point structure (cited in the file) |
+| `revocation/pki_test.go` | (c) | tlsx | ecdsa-with-SHA256 algorithm identifier (published value) |
+| `revocation/revocation.go` | (c) | tlsx | RFC 5280 CRL reason code names (published values) |
+| `revocation/revocation_test.go` | (c) | tlsx |  |
+| `revocation/source.go` | (c) | tlsx | RFC 5280 extension identifiers (published values) |
 | `scripts/filter-upstream.sh` | (c) | tlsx | runs git filter-repo over Go's history |
 | `scripts/provenance-notes.tsv` | (c) | tlsx |  |
 | `scripts/provenance.sh` | (c) | tlsx |  |

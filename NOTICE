@@ -28,7 +28,7 @@ UPSTREAM.md. In summary:
 | internal/ccm/slice.go (the function sliceForAppend from src/crypto/cipher/gcm.go) | Go | The Go Authors, BSD-3-Clause |
 | testdata/ (Go's recorded handshakes, certificates and keys for its tests) | Go | The Go Authors, BSD-3-Clause |
 | certificates_test.go (Go's generated test certificates) | Go | The Go Authors, BSD-3-Clause |
-| x_*.go, doc.go, gcm_tls.go, upstream_shims*.go, internal/tls13/x_external.go, internal/bigmod/export.go, internal/brainpool, internal/ccm (except slice.go), internal/boring, internal/cryptotest, internal/testenv, internal/testports, scripts/, documentation | tlsx | Copyright 2026 Abhinav Gautam, BSD-3-Clause (the same licence as Go's code) |
+| x_*.go, doc.go, gcm_tls.go, upstream_shims*.go, internal/tls13/x_external.go, internal/bigmod/export.go, internal/brainpool, internal/ccm (except slice.go), internal/boring, internal/cryptotest, internal/testenv, internal/testports, revocation/, scripts/, documentation | tlsx | Copyright 2026 Abhinav Gautam, BSD-3-Clause (the same licence as Go's code) |
 
 Go code adapted inside tlsx's own files
 ---------------------------------------
@@ -86,7 +86,8 @@ RFC 3610 section 8 (AES-CCM packet vectors, internal/ccm/testdata),
 RFC 5639 (brainpool curve parameters), RFC 7027 Appendix A (brainpool ECDH
 vectors), RFC 7919 Appendix A (finite field Diffie-Hellman groups), and
 algorithm identifiers from RFC 4055, RFC 5208, RFC 5280, RFC 5915 and
-RFC 8446. No standards text is reproduced. One expected CCM value in
+RFC 8446. The revocation package uses the CRL extension identifiers and
+reason code names of RFC 5280. No standards text is reproduced. One expected CCM value in
 internal/ccm/ccm_test.go was computed with the Python "cryptography"
 package's AESCCM as an independent implementation.
 
