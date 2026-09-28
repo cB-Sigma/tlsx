@@ -1,0 +1,41 @@
+// Copyright 2026 Abhinav Gautam. Use of this source code is governed
+// by the BSD-style licence in the LICENSE file.
+
+package tlsx
+
+import (
+	cryptorand "crypto/rand"
+	"encoding/binary"
+	"io"
+)
+
+// Test-only parts of the upstream shims (upstream_shims.go).
+
+func (fipsShim) Force()              {}
+func (fipsShim) TestingOnlyAbandon() {}
+
+func (byteorderShim) BEUint16(b []byte) uint16 { return binary.BigEndian.Uint16(b) }
+
+// isFIPSVersion is only asked in FIPS mode, which tlsx does not have.
+func isFIPSVersion(uint16) bool { return false }
+
+// testConfigFIPS140 is declared in upstream's fips140_test.go, which tlsx
+// does not carry (no FIPS mode); upstream's TestMain still fills it.
+var testConfigFIPS140 *Config
+
+// internalrand stands in for crypto/internal/rand, which one upstream
+// benchmark uses to make the handshake's randomness fixed.
+var internalrand internalRandShim
+
+type internalRandShim struct{}
+
+// SetTestingReader replaces crypto/rand.Reader (nil restores it).
+func (internalRandShim) SetTestingReader(r io.Reader) {
+	if r == nil {
+		cryptorand.Reader = savedRandReader
+		return
+	}
+	cryptorand.Reader = r
+}
+
+var savedRandReader = cryptorand.Reader
