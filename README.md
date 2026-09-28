@@ -18,6 +18,57 @@ go get github.com/cB-Abhinav-Gautam/tlsx
 
 Requires Go 1.27.1 or later. The current upstream base is Go 1.27.1.
 
+## Why tlsx exists
+
+Go's crypto/tls is deliberately small. It implements modern TLS for the
+web very well, and leaves out features the web does not need. Many
+industrial, utility and IoT protocols do need them:
+- Their standards require TLS features that crypto/tls lacks, for example
+  IEC 62351-3 (DNP3, IEC 60870-5-104, IEC 61850) and oneM2M TS-0003.
+- Their devices are too small or too numerous for certificates, so they
+  use pre-shared keys or raw public keys.
+
+The Go project does not plan them for crypto/tls; pre-shared-key support,
+for example, is the request
+[golang/go#6379](https://github.com/golang/go/issues/6379). So a Go
+program that talks to such devices has three choices: cgo and OpenSSL, a
+different language, or a fork.
+
+tlsx is that fork, kept as close to Go as possible:
+- It carries Go's own code and git history.
+- Its changes are small, marked `// tlsx` and opt-in.
+- It is merged with every Go release, so Go's security fixes arrive as
+  Go's own commits.
+- It is pure Go, with no cgo.
+
+## At a glance
+
+| | crypto/tls (Go 1.27) | tlsx |
+|---|---|---|
+| TLS 1.2 / 1.3, ECDHE, modern AEADs, ECH, QUIC, ML-KEM | yes | yes (Go's code) |
+| Pre-shared keys, TLS 1.2 PSK suites and TLS 1.3 external PSK | no | yes |
+| Raw public keys (RFC 7250) | no | yes |
+| TLS 1.2 renegotiation | client may accept only | client and server, RFC 5746 required |
+| TLS 1.3 key update | answers the peer's | also sends on demand |
+| Finite-field DHE (RFC 7919 groups) | no | yes |
+| AES-CCM and CCM_8 suites | no | yes |
+| Brainpool curves | no | yes |
+| encrypt_then_mac (RFC 7366) | no | yes |
+| Integrity-only and NULL suites | no | yes, opt-in (no confidentiality) |
+| status_request_v2, trusted_ca_keys, max_fragment_length | no | yes |
+| FIPS 140-3 mode, GODEBUG settings | yes | no |
+
+## When not to use it
+
+If crypto/tls already does what you need, use crypto/tls. It is maintained
+by the Go team and has a smaller surface. Some of tlsx's additions exist
+only because protocol standards demand them and weaken security when
+misused:
+- the integrity-only and NULL suites give no confidentiality;
+- static DH and renegotiation have known pitfalls.
+All of them are off unless you turn them on. Turn on only what your
+protocol requires.
+
 ## What it adds over crypto/tls
 
 With a zero `Config.Ext` and the default cipher suites and groups, tlsx
@@ -166,7 +217,6 @@ adjustments, listed in UPSTREAM.md:
   carried);
 - tls_test.go sets `Config.Ext` in its Config.Clone test and leaves tlsx's
   extra cipher suites out of its checks of upstream's suite lists.
-
 
 They include the handshakes recorded against OpenSSL in `testdata/`. They
 exercise the upstream code paths; they say nothing about tlsx's additions.
