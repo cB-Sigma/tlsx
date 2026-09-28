@@ -3,6 +3,44 @@
 All notable changes to tlsx. Versions follow semantic versioning; before
 v1.0.0, minor versions may change the API.
 
+## v0.3.0 (2026-09-28)
+
+- **BoGo.** BoringSSL's conformance suite runs against tlsx
+  (`scripts/bogo.sh`, weekly in CI) with Go's shim, copied from Go 1.27.1
+  and credited (NOTICE, UPSTREAM.md), and tlsx's own shim flags for PSK,
+  renegotiation, KeyUpdate, session IDs and exporters. On BoringSSL
+  v0.0.0-20260209204302-2a7ca5404e13: 3562 tests, 1562 pass, 5 expected
+  failures (listed with reasons in bogo_config_tlsx.json and the README),
+  1995 skipped; Go 1.27.1 passes 1333, and tlsx passes all of those.
+- **Fixes found by BoGo.**
+  - An RSASSA-PSS certificate key was accepted for RSA key exchange and
+    for PKCS #1 v1.5, rsa_pss_rsae and TLS 1.0/1.1 signatures; it is now
+    used only with rsa_pss_pss, in both roles. `IsRSAPSSKey` now follows
+    the certificate's own SubjectPublicKeyInfo.
+  - A renegotiation that changes the use of the extended master secret
+    is refused (after a downgrade the connection still reported it).
+  - A HelloRequest packed into the record of the server's Finished
+    stalled the client until the next record; it is now refused with
+    unexpected_message.
+- **GODEBUG** settings work as in crypto/tls (tlssha1, tlsmlkem,
+  tlssecpmlkem, tlsmaxrsasize): from the environment, else the build's
+  defaults, read once at first use. `GODEBUGValue` and
+  `GODEBUGNonDefault` report the values and non-default uses. The
+  upstream tests that set GODEBUG now run.
+- **`Config.Ext.AllowSHA1Signatures`** allows SHA-1 signatures in TLS 1.2
+  for one Config, as GODEBUG tlssha1=1 does for the process;
+  `ConnectionState().Ext.SHA1Signature` reports their use. Tested against
+  OpenSSL in both roles.
+- **Legacy PSK suites** for old devices: TLS_PSK_WITH_AES_128/256_CBC_SHA,
+  TLS_DHE_PSK_WITH_AES_128/256_CBC_SHA and
+  TLS_ECDHE_PSK_WITH_AES_128/256_CBC_SHA, also in TLS 1.0 and 1.1; used
+  only when listed in Config.CipherSuites. A TLS 1.2 PSK identity may be
+  empty.
+- **TLS 1.2 PSK session resumption** with `PSKConfig.Resumption`, by
+  ticket or session ID, bound to the PSK: a removed or changed key ends
+  the resumption of its sessions. TLS 1.3 external-PSK sessions are still
+  not resumed.
+
 ## v0.2.0 (2026-09-28)
 
 - New package `revocation`: certificate revocation checking with CRLs

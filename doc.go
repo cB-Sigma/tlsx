@@ -78,8 +78,11 @@
 //     RFC 5487, 6655 (CCM, CCM_8), 7905 and 8442, a psk_identity_hint and
 //     a server lookup callback, no certificate needed; TLS 1.3 external
 //     PSKs (RFC 8446 4.2.11, "ext binder") with psk_dhe_ke and optionally
-//     psk_ke. ConnectionState().Ext.PSKIdentity. PSK sessions are not
-//     resumed.
+//     psk_ke. ConnectionState().Ext.PSKIdentity. The legacy HMAC-SHA-1
+//     CBC suites of RFC 4279 and RFC 5489 are there for old devices, also
+//     in TLS 1.0 and 1.1. TLS 1.2 PSK sessions are resumed with
+//     PSKConfig.Resumption, bound to their key (x_psk_resume.go); TLS 1.3
+//     external-PSK sessions are not.
 //   - Raw public keys (x_rpk.go; RFC 7250; Config.Ext.RawPublicKeys) in
 //     TLS 1.2 and 1.3, both directions, trusted through a verify callback
 //     (pinning); ConnectionState().Ext.PeerRawPublicKey.
@@ -98,9 +101,19 @@
 // data only. AES-CCM (internal/ccm) uses crypto/aes and constant-time tag
 // comparison.
 //
+// # GODEBUG and SHA-1
+//
+// The GODEBUG settings crypto/tls reads (tlssha1, tlsmlkem, tlssecpmlkem,
+// tlsmaxrsasize) work as in crypto/tls: from the GODEBUG environment
+// variable, else the build's defaults (go.mod go and godebug lines,
+// //go:debug), else Go's defaults. They are read once, at first use; a
+// later os.Setenv is not seen and runtime/metrics is not fed
+// (GODEBUGValue and GODEBUGNonDefault report them instead). SHA-1
+// signatures in TLS 1.2, off by default since Go 1.25, are allowed by
+// GODEBUG tlssha1=1 or, for one Config, by Config.Ext.AllowSHA1Signatures.
+//
 // # Not implemented
 //
-// SHA-1 signatures in TLS 1.2 handshakes (off by default upstream since
-// Go 1.25, GODEBUG is ignored here), GODEBUG
-// settings (fixed at their defaults) and FIPS 140-3 mode.
+// FIPS 140-3 mode, 0-RTT, and TLS 1.3 resumption of sessions made with an
+// external PSK.
 package tlsx

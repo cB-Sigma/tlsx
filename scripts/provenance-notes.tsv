@@ -33,6 +33,8 @@ x_certs.go	(c)	tlsx; ASN.1 structs as in crypto/x509 (pkcs8, publicKeyInfo; Go; 
 x_config.go	(c)	tlsx
 x_conn.go	(c)	tlsx; SendKeyUpdate's send steps adapted from Go's handleKeyUpdate in conn.go (noted in the file)
 x_features_test.go	(c)	tlsx
+x_godebug.go	(c)	tlsx; GODEBUG settings as Go's internal/godebug reads them (own implementation)
+x_godebug_test.go	(c)	tlsx
 x_groups.go	(c)	tlsx; RFC 7919 group primes (published values, cited in the file)
 x_handshake.go	(c)	tlsx; saveSessionID adapted from Go's saveSessionTicket (noted in the file)
 x_messages.go	(c)	tlsx; certificate_authorities and ocsp_multi encoders adapted from certificateRequestMsgTLS13 and certificateStatusMsg in Go's handshake_messages.go (noted in the file)
@@ -43,8 +45,12 @@ x_psk.go	(c)	tlsx; follows and reuses steps of Go's doFullHandshake (client and 
 x_psk_ech_test.go	(c)	tlsx
 x_psk_openssl_test.go	(c)	tlsx
 x_psk_test.go	(c)	tlsx
+x_psk_resume.go	(c)	tlsx; loadPSKSessionX adapted from the TLS 1.2 tail of Go's loadSession in handshake_client.go (noted in the file)
+x_psk_resume_test.go	(c)	tlsx
 x_renegotiation.go	(c)	tlsx; handleHelloRequest adapted from Go's handleRenegotiation in conn.go (noted in the file)
 x_rpk.go	(c)	tlsx; short passages from processCertsFromClient, verifyServerCertificate and certificateMsg in Go's crypto/tls (noted in the file)
+x_sha1.go	(c)	tlsx
+x_sha1_openssl_test.go	(c)	tlsx
 x_staticdh.go	(c)	tlsx
 x_staticdh_test.go	(c)	tlsx
 x_suites.go	(c)	tlsx; dheKeyAgreement adapted from Go's ecdheKeyAgreement in key_agreement.go, the TLS 1.3 CCM constructors from aeadAESGCMTLS13 (noted in the file)

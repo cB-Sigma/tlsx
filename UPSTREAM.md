@@ -124,7 +124,7 @@ provenance script use them.
 - **Rewrites.**
   - package `tls` becomes `tlsx`;
   - `//go:linkname` lines are removed; in `internal/bigmod`, `//go:build` lines too;
-  - `internal/godebug`, `crypto/tls/internal/fips140tls` and `internal/byteorder` are replaced by the stand-ins in `upstream_shims.go`. GODEBUG settings stay at their defaults, and FIPS mode is never required;
+  - `internal/godebug`, `crypto/tls/internal/fips140tls` and `internal/byteorder` are replaced by the stand-ins in `upstream_shims.go` and `x_godebug.go`. GODEBUG settings are read from the environment and the build's defaults (x_godebug.go), and FIPS mode is never required;
   - `internal/cpu` becomes `golang.org/x/sys/cpu`;
   - in tests, `crypto/internal/boring`, `crypto/internal/cryptotest` and `internal/testenv` become the small stand-ins under `internal/`, and `crypto/internal/rand` becomes the stand-in in `upstream_shims_test.go`;
   - in bigmod, the internal `byteorder` becomes `encoding/binary`.
@@ -136,10 +136,12 @@ provenance script use them.
   - The upstream files carry small hooks marked `// tlsx`; `grep -n '// tlsx' *.go` lists them.
   - Each upstream file with changes has a notice line under Go's header.
 - **Upstream tests that are skipped or edited.**
-  - Skips, each with its reason (`go test -v` lists 13): tests that set
-    GODEBUG (8), tests that use the external network (2), and the three
-    recorded renegotiation tests, because tlsx's renegotiation ClientHello
-    differs.
+  - Skips, each with its reason (`go test -v` lists 5): tests that use
+    the external network (2), and the three recorded renegotiation tests,
+    because tlsx's renegotiation ClientHello differs. The tests that set
+    GODEBUG run: the `internal/testenv` stand-in sets it as Go's does and
+    tlsx reads its settings again (x_godebug.go). TestBogoSuite runs only
+    when asked (README "BoGo").
   - tls_test.go: the FIPS 140 variant of a test is a skip (no FIPS mode);
     the Config.Clone test sets `Config.Ext`; the cipher-suite list tests
     leave out tlsx's extra suites (`isTLSXSuite`).
