@@ -13,6 +13,9 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"errors"
+	"fmt"
+	"io"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -367,4 +370,58 @@ func TestRawPublicKeys(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The legacy HMAC-SHA-1 CBC PSK suites (RFC 4279, RFC 5489) work from
+// TLS 1.0, with encrypt_then_mac when negotiated; the TLS 1.2 PSK suites
+// stay TLS 1.2 only. None is offered unless listed in CipherSuites.
+func TestPSKLegacySuites(t *testing.T) {
+	legacy := []uint16{TLS_PSK_WITH_AES_128_CBC_SHA, TLS_PSK_WITH_AES_256_CBC_SHA, TLS_DHE_PSK_WITH_AES_128_CBC_SHA,
+		TLS_DHE_PSK_WITH_AES_256_CBC_SHA, TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA, TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA}
+	for _, v := range []uint16{VersionTLS10, VersionTLS11, VersionTLS12} {
+		for _, id := range legacy {
+			for _, etm := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/etm=%v", VersionName(v), CipherSuiteName(id), etm), func(t *testing.T) {
+					scfg, ccfg := pskServer(id), pskClient(id)
+					scfg.MinVersion, scfg.MaxVersion, ccfg.MinVersion, ccfg.MaxVersion = v, v, v, v
+					ccfg.CurvePreferences = []CurveID{X25519, FFDHE2048}
+					scfg.CurvePreferences = []CurveID{X25519, FFDHE2048}
+					ccfg.Ext.EncryptThenMAC, scfg.Ext.EncryptThenMAC = etm, etm
+					c, s, err := xPair(t, ccfg, scfg)
+					if err != nil {
+						t.Fatal(err)
+					}
+					cs := c.ConnectionState()
+					if cs.Version != v || cs.CipherSuite != id || cs.Ext.EncryptThenMAC != etm {
+						t.Fatalf("%s %s etm %v", VersionName(cs.Version), CipherSuiteName(cs.CipherSuite), cs.Ext.EncryptThenMAC)
+					}
+					// TLS 1.0 CBC records are split 1/n-1: read it all.
+					go c.Write([]byte("ping"))
+					buf := make([]byte, 4)
+					if _, err := io.ReadFull(s, buf); err != nil || string(buf) != "ping" {
+						t.Fatalf("data: %q %v", buf, err)
+					}
+				})
+			}
+		}
+	}
+	t.Run("TLS 1.2 suites stay TLS 1.2 only", func(t *testing.T) {
+		scfg, ccfg := pskServer(TLS_PSK_WITH_AES_128_CBC_SHA256), pskClient(TLS_PSK_WITH_AES_128_CBC_SHA256)
+		scfg.MinVersion, scfg.MaxVersion, ccfg.MinVersion, ccfg.MaxVersion = VersionTLS11, VersionTLS11, VersionTLS11, VersionTLS11
+		if _, _, err := xPair(t, ccfg, scfg); err == nil {
+			t.Fatal("TLS_PSK_WITH_AES_128_CBC_SHA256 negotiated in TLS 1.1")
+		}
+	})
+	t.Run("not offered unless listed", func(t *testing.T) {
+		ccfg := pskClient()
+		hello, _, _, err := (&Conn{config: ccfg, isClient: true}).makeClientHello()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range legacy {
+			if slices.Contains(hello.cipherSuites, id) {
+				t.Errorf("%s offered by default", CipherSuiteName(id))
+			}
+		}
+	})
 }

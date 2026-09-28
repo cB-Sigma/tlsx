@@ -51,6 +51,13 @@ var opensslPSKSuites = map[uint16]string{
 	TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256:       "ECDHE-PSK-AES128-CBC-SHA256",
 	TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA384:       "ECDHE-PSK-AES256-CBC-SHA384",
 	TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256: "ECDHE-PSK-CHACHA20-POLY1305",
+	// Legacy HMAC-SHA-1 suites.
+	TLS_PSK_WITH_AES_128_CBC_SHA:       "PSK-AES128-CBC-SHA",
+	TLS_PSK_WITH_AES_256_CBC_SHA:       "PSK-AES256-CBC-SHA",
+	TLS_DHE_PSK_WITH_AES_128_CBC_SHA:   "DHE-PSK-AES128-CBC-SHA",
+	TLS_DHE_PSK_WITH_AES_256_CBC_SHA:   "DHE-PSK-AES256-CBC-SHA",
+	TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA: "ECDHE-PSK-AES128-CBC-SHA",
+	TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA: "ECDHE-PSK-AES256-CBC-SHA",
 }
 
 func ffdhe2048Params(t *testing.T) string {
@@ -201,4 +208,42 @@ func TestOpenSSLRawPublicKeys(t *testing.T) {
 			Ext: ConfigExt{RawPublicKeys: &RawPublicKeyConfig{Send: true, Verify: pin(serverSPKI), RawOnly: true}}}
 		goServerFails(t, cfg, "-enable_server_rpk", "-enable_client_rpk", "-cert", f["client.pem"], "-key", f["client.key"])
 	})
+}
+
+// The legacy HMAC-SHA-1 PSK suites in TLS 1.0 and 1.1 against OpenSSL
+// (which allows those versions only at security level 0).
+func TestOpenSSLPSKLegacyVersions(t *testing.T) {
+	opensslBin(t)
+	dh := ffdhe2048Params(t)
+	for _, v := range []struct {
+		vers uint16
+		flag string
+	}{{VersionTLS10, "-tls1"}, {VersionTLS11, "-tls1_1"}} {
+		for _, id := range []uint16{TLS_PSK_WITH_AES_128_CBC_SHA, TLS_DHE_PSK_WITH_AES_256_CBC_SHA, TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA} {
+			cipher := opensslPSKSuites[id] + ":@SECLEVEL=0"
+			t.Run(VersionName(v.vers)+" Go client, s_server "+opensslPSKSuites[id], func(t *testing.T) {
+				srv, port := sServerPSK(t, v.flag, "-cipher", cipher, "-psk_hint", "tlsx-hint", "-dhparam", dh)
+				cfg := pskClient(id)
+				cfg.MinVersion, cfg.MaxVersion = v.vers, v.vers
+				cfg.CurvePreferences = []CurveID{X25519, FFDHE2048}
+				c := goClient(t, port, cfg)
+				if cs := c.ConnectionState(); cs.CipherSuite != id || cs.Version != v.vers {
+					t.Fatalf("%s %s", VersionName(cs.Version), CipherSuiteName(cs.CipherSuite))
+				}
+				c.Write([]byte("legacy-psk\n"))
+				srv.waitFor("legacy-psk")
+			})
+			t.Run(VersionName(v.vers)+" s_client, Go server "+opensslPSKSuites[id], func(t *testing.T) {
+				cfg := pskServer(id)
+				cfg.MinVersion, cfg.MaxVersion = v.vers, v.vers
+				cfg.CurvePreferences = []CurveID{X25519, FFDHE2048}
+				cl, c := goServer(t, cfg, sClientPSK(v.flag, "-cipher", cipher)...)
+				if cs := c.ConnectionState(); cs.CipherSuite != id || cs.Version != v.vers {
+					t.Fatalf("%s %s", VersionName(cs.Version), CipherSuiteName(cs.CipherSuite))
+				}
+				cl.send("legacy-psk-client")
+				readUntil(t, c, "legacy-psk-client")
+			})
+		}
+	}
 }

@@ -196,7 +196,8 @@ type StateExt struct {
 	// sent (RFC 5878), unverified: the application checks them.
 	PeerAttributeCertificates [][]byte
 	// PSKIdentity is the pre-shared key identity the handshake used (nil
-	// when none); PSKIdentityHint the TLS 1.2 server's hint a client got.
+	// when none; empty but not nil for an empty TLS 1.2 identity);
+	// PSKIdentityHint the TLS 1.2 server's hint a client got.
 	PSKIdentity, PSKIdentityHint []byte
 	// SHA1Signature says a TLS 1.2 handshake on the connection used a
 	// SHA-1 signature, by either side (Config.Ext.AllowSHA1Signatures,

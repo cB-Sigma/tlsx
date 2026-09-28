@@ -25,8 +25,10 @@ import (
 // Pre-shared keys.
 //
 // TLS 1.2: the PSK key exchanges of RFC 4279 (PSK, DHE_PSK) and RFC 5489
-// (ECDHE_PSK) with the suites of RFC 4279, RFC 5487, RFC 6655, RFC 7905
-// and RFC 8442 listed below. None is offered unless Config.CipherSuites
+// (ECDHE_PSK) with the suites of RFC 4279, RFC 5487, RFC 5489, RFC 6655,
+// RFC 7905 and RFC 8442 listed below. The legacy HMAC-SHA-1 CBC suites
+// (TLS_PSK_WITH_AES_128_CBC_SHA and the like) are for old devices; they
+// also work in TLS 1.0 and 1.1. A TLS 1.2 identity may be empty. None is offered unless Config.CipherSuites
 // lists it and Config.Ext.PSK is set; a PSK suite uses no certificate, so
 // a server with only PSKs needs no Config.Certificates.
 //
@@ -64,6 +66,15 @@ const (
 	TLS_ECDHE_PSK_WITH_AES_128_CCM_8_SHA256     uint16 = 0xd003 // RFC 8442
 	TLS_ECDHE_PSK_WITH_AES_128_CCM_SHA256       uint16 = 0xd005 // RFC 8442
 	TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256 uint16 = 0xccac // RFC 7905
+
+	// Legacy suites with HMAC-SHA-1, for old devices: CBC only (MAC then
+	// encrypt, or encrypt_then_mac when negotiated), usable from TLS 1.0.
+	TLS_PSK_WITH_AES_128_CBC_SHA       uint16 = 0x008c // RFC 4279
+	TLS_PSK_WITH_AES_256_CBC_SHA       uint16 = 0x008d // RFC 4279
+	TLS_DHE_PSK_WITH_AES_128_CBC_SHA   uint16 = 0x0090 // RFC 4279
+	TLS_DHE_PSK_WITH_AES_256_CBC_SHA   uint16 = 0x0091 // RFC 4279
+	TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA uint16 = 0xc035 // RFC 5489
+	TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA uint16 = 0xc036 // RFC 5489
 )
 
 // PSKConfig configures pre-shared keys (Config.Ext.PSK).
@@ -147,6 +158,12 @@ var pskSuiteNames = map[uint16]string{
 	TLS_ECDHE_PSK_WITH_AES_128_CCM_8_SHA256:     "TLS_ECDHE_PSK_WITH_AES_128_CCM_8_SHA256",
 	TLS_ECDHE_PSK_WITH_AES_128_CCM_SHA256:       "TLS_ECDHE_PSK_WITH_AES_128_CCM_SHA256",
 	TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256: "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256",
+	TLS_PSK_WITH_AES_128_CBC_SHA:                "TLS_PSK_WITH_AES_128_CBC_SHA",
+	TLS_PSK_WITH_AES_256_CBC_SHA:                "TLS_PSK_WITH_AES_256_CBC_SHA",
+	TLS_DHE_PSK_WITH_AES_128_CBC_SHA:            "TLS_DHE_PSK_WITH_AES_128_CBC_SHA",
+	TLS_DHE_PSK_WITH_AES_256_CBC_SHA:            "TLS_DHE_PSK_WITH_AES_256_CBC_SHA",
+	TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA:          "TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA",
+	TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA:          "TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA",
 }
 
 func init() {
@@ -177,6 +194,13 @@ func init() {
 		{TLS_DHE_PSK_WITH_AES_256_CBC_SHA384, 32, 48, 16, pskKA, tls12 | d | s, cipherAES, macSHA384, nil},
 		{TLS_PSK_WITH_AES_128_CBC_SHA256, 16, 32, 16, pskKA, tls12, cipherAES, macSHA256, nil},
 		{TLS_PSK_WITH_AES_256_CBC_SHA384, 32, 48, 16, pskKA, tls12 | s, cipherAES, macSHA384, nil},
+		// Legacy, HMAC-SHA-1, from TLS 1.0 on (no suiteTLS12), last.
+		{TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA, 16, 20, 16, pskKA, suitePSK | e, cipherAES, macSHA1, nil},
+		{TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA, 32, 20, 16, pskKA, suitePSK | e, cipherAES, macSHA1, nil},
+		{TLS_DHE_PSK_WITH_AES_128_CBC_SHA, 16, 20, 16, pskKA, suitePSK | d, cipherAES, macSHA1, nil},
+		{TLS_DHE_PSK_WITH_AES_256_CBC_SHA, 32, 20, 16, pskKA, suitePSK | d, cipherAES, macSHA1, nil},
+		{TLS_PSK_WITH_AES_128_CBC_SHA, 16, 20, 16, pskKA, suitePSK, cipherAES, macSHA1, nil},
+		{TLS_PSK_WITH_AES_256_CBC_SHA, 32, 20, 16, pskKA, suitePSK, cipherAES, macSHA1, nil},
 	}
 	var ids []uint16
 	for _, c := range suites {
@@ -257,9 +281,11 @@ func pskPremaster(other, key []byte) []byte {
 // not know (the client is sent unknown_psk_identity).
 var ErrUnknownPSKIdentity = errors.New("tlsx: unknown PSK identity")
 
-// checkPSKLengths applies RFC 4279 5.3 limits.
-func checkPSKLengths(identity, key []byte) error {
-	if len(identity) == 0 || len(identity) > 0xffff {
+// checkPSKLengths applies the length limits: a TLS 1.2 identity may be
+// empty (RFC 4279 2: psk_identity<0..2^16-1>), a TLS 1.3 one may not
+// (RFC 8446 4.2.11: identity<1..2^16-1>).
+func checkPSKLengths(identity, key []byte, tls13 bool) error {
+	if tls13 && len(identity) == 0 || len(identity) > 0xffff {
 		return errors.New("tlsx: a PSK identity must have 1 to 65535 bytes")
 	}
 	if len(key) == 0 || len(key) > 0xffff {
@@ -268,10 +294,11 @@ func checkPSKLengths(identity, key []byte) error {
 	return nil
 }
 
-// cipherSuiteOkPSK decides a server's use of a TLS 1.2 PSK suite.
+// cipherSuiteOkPSK decides a server's use of a PSK suite (TLS 1.2; the
+// legacy SHA-1 suites from TLS 1.0).
 func (hs *serverHandshakeState) cipherSuiteOkPSK(c *cipherSuite) bool {
 	cfg := hs.c.config
-	if !cfg.Ext.PSK.serverReady() || hs.c.vers < VersionTLS12 {
+	if !cfg.Ext.PSK.serverReady() || hs.c.vers < VersionTLS12 && c.flags&suiteTLS12 != 0 {
 		return false
 	}
 	switch {
@@ -391,10 +418,11 @@ func (hs *serverHandshakeState) doFullHandshakePSK() error {
 	}
 	s := cryptobyte.String(ckx.ciphertext)
 	var identity []byte
-	if !readUint16LengthPrefixed(&s, &identity) || len(identity) == 0 {
+	if !readUint16LengthPrefixed(&s, &identity) {
 		c.sendAlert(alertDecodeError)
 		return errClientKeyExchange
 	}
+	identity = append([]byte{}, identity...) // non-nil: an empty identity is still one
 	var other []byte
 	switch {
 	case ecdh != nil:
@@ -577,10 +605,11 @@ func (hs *clientHandshakeState) doFullHandshakePSK() error {
 			return err
 		}
 	}
-	if err := checkPSKLengths(identity, key); err != nil {
+	if err := checkPSKLengths(identity, key, false); err != nil {
 		c.sendAlert(alertInternalError)
 		return err
 	}
+	identity = append([]byte{}, identity...) // non-nil: an empty identity is still one
 	if c.handshakes > 0 && !bytes.Equal(identity, c.x.pskIdentity) {
 		c.sendAlert(alertHandshakeFailure)
 		return errors.New("tlsx: the PSK identity changed in a renegotiation")
@@ -639,7 +668,7 @@ func (c *Conn) loadExternalPSK(hello *clientHelloMsg) (*SessionState, *tls13.Ear
 		len(hello.encryptedClientHello) > 0 || len(hello.pskIdentities) > 0 {
 		return nil, nil, nil, nil
 	}
-	if err := checkPSKLengths(p.Identity, p.Key); err != nil {
+	if err := checkPSKLengths(p.Identity, p.Key, true); err != nil {
 		return nil, nil, nil, err
 	}
 	suite := cipherSuiteTLS13ByID(tls13SuiteForHash(p.hash()))
