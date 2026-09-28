@@ -3,8 +3,8 @@
 
 // Package testenv stands in for the standard library's internal/testenv in
 // the upstream crypto/tls tests that tlsx carries. It provides only what
-// those tests call, with tlsx's behaviour: GODEBUG settings are fixed at
-// their defaults and the tests never use the external network (the BoGo
+// those tests call, with tlsx's behaviour: the tests never use the
+// external network (the BoGo
 // suite fetches BoringSSL only when asked, see bogo_shim_test.go).
 package testenv
 
@@ -14,10 +14,22 @@ import (
 	"testing"
 )
 
-// SetGODEBUG skips the test: tlsx ignores GODEBUG.
+// GODEBUGChanged, if set, is called when SetGODEBUG changes GODEBUG and
+// when the test restores it: tlsx reads its settings once (x_godebug.go)
+// and its tests set this to make it read them again.
+var GODEBUGChanged func()
+
+// SetGODEBUG appends a setting to GODEBUG for the test, as Go's testenv
+// does (the test must not be parallel).
 func SetGODEBUG(t testing.TB, godebug string) {
 	t.Helper()
-	t.Skipf("tlsx ignores GODEBUG (%s)", godebug)
+	if GODEBUGChanged != nil {
+		t.Cleanup(GODEBUGChanged) // runs after GODEBUG is restored
+	}
+	t.Setenv("GODEBUG", os.Getenv("GODEBUG")+","+godebug)
+	if GODEBUGChanged != nil {
+		GODEBUGChanged()
+	}
 }
 
 // MustHaveExternalNetwork skips the test.

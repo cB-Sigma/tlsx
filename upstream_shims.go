@@ -7,8 +7,8 @@ import "encoding/binary"
 
 // This file stands in for the standard library internals that the
 // upstream crypto/tls imports and a package outside GOROOT cannot: FIPS
-// 140 mode (never required here), GODEBUG settings (always at their
-// default) and internal/byteorder. The upstream call sites stay unchanged
+// 140 mode (never required here), GODEBUG settings (x_godebug.go) and
+// internal/byteorder. The upstream call sites stay unchanged
 // so security fixes merge with small diffs (UPSTREAM.md).
 
 type fipsShim struct{}
@@ -18,22 +18,9 @@ func (fipsShim) Required() bool { return false }
 
 var fips140tls fipsShim
 
-type godebugShim struct{}
-
-// godebugSetting is a GODEBUG setting fixed at its default.
-type godebugSetting struct{ name string }
-
-func (godebugShim) New(name string) *godebugSetting { return &godebugSetting{name: name} }
-
-// Value is "" (the default behaviour of every setting).
-func (*godebugSetting) Value() string { return "" }
-
-// IncNonDefault would count a non-default use; defaults never are.
-func (*godebugSetting) IncNonDefault() {}
-
-// Name is the setting name.
-func (s *godebugSetting) Name() string { return s.name }
-
+// godebug stands in for internal/godebug: the settings are real (the
+// GODEBUG environment variable, then the build's defaults), see
+// x_godebug.go.
 var godebug godebugShim
 
 type byteorderShim struct{}

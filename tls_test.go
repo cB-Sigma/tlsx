@@ -2244,9 +2244,6 @@ func TestHandshakeMLKEM(t *testing.T) {
 	baseClientConfig := testConfigClient.Clone()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if strings.HasPrefix(test.name, "GODEBUG") {
-				t.Skip("tlsx ignores GODEBUG")
-			}
 			if fips140tls.Required() && test.expectSelected == X25519 {
 				t.Skip("X25519 not supported in FIPS mode")
 			}
