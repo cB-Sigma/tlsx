@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
 	"bytes"
@@ -11,14 +11,12 @@ import (
 	"crypto/hkdf"
 	"crypto/hmac"
 	"crypto/hpke"
-	"crypto/internal/fips140/tls13"
 	"crypto/rsa"
-	"crypto/tls/internal/fips140tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/tls13"
 	"hash"
-	"internal/byteorder"
 	"io"
 	"slices"
 	"sort"

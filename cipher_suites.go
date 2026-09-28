@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
 	"crypto"
@@ -10,7 +10,6 @@ import (
 	"crypto/cipher"
 	"crypto/des"
 	"crypto/hmac"
-	"crypto/internal/boring"
 	fipsaes "crypto/internal/fips140/aes"
 	"crypto/internal/fips140/aes/gcm"
 	"crypto/rc4"
@@ -18,8 +17,9 @@ import (
 	"crypto/sha256"
 	_ "crypto/sha512" // for crypto.SHA384
 	"fmt"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/boring"
+	"golang.org/x/sys/cpu"
 	"hash"
-	"internal/cpu"
 	"runtime"
 	_ "unsafe" // for linkname
 
@@ -209,8 +209,6 @@ type cipherSuiteTLS13 struct {
 //
 // Do not remove or change the type signature.
 // See go.dev/issue/67401.
-//
-//go:linkname cipherSuitesTLS13
 var cipherSuitesTLS13 = []*cipherSuiteTLS13{ // TODO: replace with a map.
 	{TLS_AES_128_GCM_SHA256, 16, aeadAESGCMTLS13, crypto.SHA256},
 	{TLS_CHACHA20_POLY1305_SHA256, 32, aeadChaCha20Poly1305, crypto.SHA256},
@@ -538,8 +536,6 @@ func aeadAESGCM(key, noncePrefix []byte) aead {
 //
 // Do not remove or change the type signature.
 // See go.dev/issue/67401.
-//
-//go:linkname aeadAESGCMTLS13
 func aeadAESGCMTLS13(key, nonceMask []byte) aead {
 	if len(nonceMask) != aeadNonceLength {
 		panic("tls: internal error: wrong nonce length")

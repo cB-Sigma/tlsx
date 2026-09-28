@@ -2,10 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
-	"internal/godebug"
 	"slices"
 	_ "unsafe" // for linkname
 )
@@ -93,8 +92,6 @@ func defaultCipherSuites(aesGCMPreferred bool) []uint16 {
 //
 // Do not remove or change the type signature.
 // See go.dev/issue/67401.
-//
-//go:linkname defaultCipherSuitesTLS13
 var defaultCipherSuitesTLS13 = []uint16{
 	TLS_AES_128_GCM_SHA256,
 	TLS_AES_256_GCM_SHA384,
@@ -109,8 +106,6 @@ var defaultCipherSuitesTLS13 = []uint16{
 //
 // Do not remove or change the type signature.
 // See go.dev/issue/67401.
-//
-//go:linkname defaultCipherSuitesTLS13NoAES
 var defaultCipherSuitesTLS13NoAES = []uint16{
 	TLS_CHACHA20_POLY1305_SHA256,
 	TLS_AES_128_GCM_SHA256,

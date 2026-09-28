@@ -5,8 +5,7 @@
 package bigmod
 
 import (
-	_ "crypto/internal/fips140/check"
-	"crypto/internal/fips140deps/byteorder"
+	"encoding/binary"
 	"errors"
 	"math/bits"
 )
@@ -214,9 +213,9 @@ func (x *Nat) SetOverflowingBytes(b []byte, m *Modulus) (*Nat, error) {
 // big-endian encoded uint value.
 func bigEndianUint(buf []byte) uint {
 	if _W == 64 {
-		return uint(byteorder.BEUint64(buf))
+		return uint(binary.BigEndian.Uint64(buf))
 	}
-	return uint(byteorder.BEUint32(buf))
+	return uint(binary.BigEndian.Uint32(buf))
 }
 
 func (x *Nat) setBytes(b []byte) error {

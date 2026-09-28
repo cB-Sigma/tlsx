@@ -2,18 +2,18 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
 	"crypto"
 	"crypto/hmac"
-	"crypto/internal/fips140/tls12"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"errors"
 	"fmt"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/tls12"
 	"hash"
 )
 

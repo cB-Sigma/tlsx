@@ -2,16 +2,16 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
 	"crypto"
 	"crypto/ecdh"
 	"crypto/fips140"
 	"crypto/hmac"
-	"crypto/internal/fips140/tls13"
 	"crypto/mlkem"
 	"errors"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/tls13"
 	"hash"
 	"io"
 )

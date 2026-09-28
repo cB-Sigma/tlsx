@@ -2,15 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
 	"crypto"
 	"crypto/fips140"
-	"crypto/internal/cryptotest"
 	"crypto/mldsa"
-	"crypto/tls/internal/fips140tls"
-	"internal/testenv"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/cryptotest"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/testenv"
 	"strconv"
 	"testing"
 )

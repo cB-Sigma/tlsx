@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
 	"bytes"
@@ -12,11 +12,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/fips140"
-	"crypto/internal/boring"
-	"crypto/internal/cryptotest"
 	"crypto/mldsa"
 	"crypto/rand"
-	"crypto/tls/internal/fips140tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
@@ -24,7 +21,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"internal/testenv"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/boring"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/cryptotest"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/testenv"
 	"io"
 	"math"
 	"math/big"

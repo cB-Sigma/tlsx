@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
 	"bytes"
@@ -10,15 +10,13 @@ import (
 	"crypto"
 	"crypto/ecdh"
 	"crypto/elliptic"
-	internalrand "crypto/internal/rand"
 	"crypto/rand"
-	"crypto/tls/internal/fips140tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"internal/testenv"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/testenv"
 	"io"
 	"net"
 	"os"

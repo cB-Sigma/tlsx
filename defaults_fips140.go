@@ -4,16 +4,16 @@
 
 //go:build !boringcrypto
 
-package tls
+package tlsx
 
 import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
-	"crypto/internal/boring"
 	"crypto/mldsa"
 	"crypto/rsa"
 	"crypto/x509"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/boring"
 )
 
 // These FIPS 140-3 policies allow anything approved by SP 800-140C

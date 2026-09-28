@@ -2,18 +2,18 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/internal/boring"
 	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
-	"internal/testenv"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/boring"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/testenv"
 	"io"
 	"net"
 	"os"
