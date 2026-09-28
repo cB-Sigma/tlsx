@@ -7,3 +7,5 @@
 33d53437049b90e96a887b73adfd22efae496281
 # mechanical: replace BoringCrypto and FIPS-module calls with public crypto packages
 c550d201ddd16ca5b97f6d625b2327c8ba80de75
+# mechanical: rename the BoGo shim's package and restore Go's shim hooks
+6d2c9e54c0d7f3accb03c9f8eb0ec3df9c78dbec
