@@ -961,6 +961,10 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 		}
 	}
 
+	if err := c.checkRenegotiationEMS(hs.serverHello.extendedMasterSecret); err != nil { // tlsx
+		return false, err
+	}
+
 	if c.handshakes > 0 && c.secureRenegotiation {
 		var expectedSecureRenegotiation [24]byte
 		copy(expectedSecureRenegotiation[:], c.clientFinished[:])

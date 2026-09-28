@@ -347,6 +347,28 @@ func (c *Conn) checkRenegotiationIdentity(leaf []byte) error {
 	return nil
 }
 
+// renegotiationEMSError is the refusal of a renegotiation that changes the
+// use of the extended master secret (RFC 7627): had is the connection's,
+// got the new handshake's. Dropping it would leave the renegotiated
+// session without the protection the connection had (and ConnectionState
+// would still report it); taking it up mid-connection is refused too, as
+// BoringSSL does.
+func renegotiationEMSError(handshakes int, had, got bool) error {
+	if handshakes > 0 && had != got {
+		return errors.New("tlsx: renegotiation changed the use of the extended master secret")
+	}
+	return nil
+}
+
+// checkRenegotiationEMS applies renegotiationEMSError to a handshake.
+func (c *Conn) checkRenegotiationEMS(got bool) error {
+	if err := renegotiationEMSError(c.handshakes, c.extMasterSecret, got); err != nil {
+		c.sendAlert(alertHandshakeFailure)
+		return err
+	}
+	return nil
+}
+
 // serverRenegotiationInfo checks a server-side ClientHello's
 // renegotiation_info and returns the ServerHello's.
 func (c *Conn) serverRenegotiationInfo(ch *clientHelloMsg) ([]byte, error) {

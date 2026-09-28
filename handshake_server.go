@@ -263,6 +263,9 @@ func (hs *serverHandshakeState) processClientHello() error {
 	}
 
 	hs.hello.extendedMasterSecret = hs.clientHello.extendedMasterSecret
+	if err := c.checkRenegotiationEMS(hs.hello.extendedMasterSecret); err != nil { // tlsx
+		return err
+	}
 	hs.hello.secureRenegotiationSupported = hs.clientHello.secureRenegotiationSupported
 	hs.hello.compressionMethod = compressionNone
 	if len(hs.clientHello.serverName) > 0 {

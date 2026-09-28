@@ -1219,3 +1219,26 @@ func TestRSANullSHA256(t *testing.T) {
 		t.Fatal("accepted by a default server")
 	}
 }
+
+// A renegotiation may not change the use of the extended master secret
+// (found by BoGo's ExtendedMasterSecret-Renego-Downgrade and -Upgrade,
+// which also run the check end to end).
+func TestRenegotiationEMSChange(t *testing.T) {
+	for _, tc := range []struct {
+		handshakes int
+		had, got   bool
+		refused    bool
+	}{
+		{0, false, true, false}, // first handshake: anything goes
+		{0, false, false, false},
+		{1, true, true, false},
+		{1, false, false, false},
+		{1, true, false, true}, // downgrade
+		{2, false, true, true}, // upgrade
+	} {
+		err := renegotiationEMSError(tc.handshakes, tc.had, tc.got)
+		if (err != nil) != tc.refused {
+			t.Errorf("handshakes %d, EMS %v then %v: got %v, refused %v", tc.handshakes, tc.had, tc.got, err, tc.refused)
+		}
+	}
+}
