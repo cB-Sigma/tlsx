@@ -750,6 +750,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 			c.curveID = ka.group
 			c.peerSigAlg = ka.signatureAlgorithm
 		}
+		c.x.noteSigAlg(c.peerSigAlg) // tlsx: Ext.SHA1Signature
 
 		msg, err = c.readHandshake(&hs.finishedHash)
 		if err != nil {
@@ -842,7 +843,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		}
 
 		if c.vers >= VersionTLS12 {
-			signatureAlgorithm, err := selectSignatureScheme(c.vers, chainToSend, certReq.supportedSignatureAlgorithms)
+			signatureAlgorithm, err := selectSignatureSchemeX(c.config, c.vers, chainToSend, certReq.supportedSignatureAlgorithms) // tlsx: Ext.AllowSHA1Signatures
 			if err != nil {
 				c.sendAlert(alertHandshakeFailure)
 				return err
@@ -853,6 +854,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 			}
 			certVerify.hasSignatureAlgorithm = true
 			certVerify.signatureAlgorithm = signatureAlgorithm
+			c.x.noteSigAlg(signatureAlgorithm) // tlsx: Ext.SHA1Signature
 			if sigHash == crypto.SHA1 {
 				tlssha1.Value() // ensure godebug is initialized
 				tlssha1.IncNonDefault()
@@ -1344,7 +1346,7 @@ func (c *Conn) getClientCertificate(cri *CertificateRequestInfo) (*Certificate, 
 	}
 
 	for _, chain := range c.config.Certificates {
-		if err := cri.SupportsCertificate(&chain); err != nil {
+		if err := c.config.supportsCertificateX(cri, &chain); err != nil { // tlsx: Ext.AllowSHA1Signatures
 			continue
 		}
 		return &chain, nil

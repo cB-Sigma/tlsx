@@ -1460,7 +1460,7 @@ func (chi *ClientHelloInfo) SupportsCertificate(c *Certificate) error {
 	// If the client sent the signature_algorithms extension, ensure it supports
 	// schemes we can use with this certificate and TLS version.
 	if len(chi.SignatureSchemes) > 0 {
-		if _, err := selectSignatureScheme(vers, c, chi.SignatureSchemes); err != nil {
+		if _, err := selectSignatureSchemeX(chi.config, vers, c, chi.SignatureSchemes); err != nil { // tlsx: Ext.AllowSHA1Signatures
 			return supportsRSAFallback(err)
 		}
 	}

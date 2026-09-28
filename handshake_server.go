@@ -681,6 +681,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 			c.curveID = ka.group
 			c.peerSigAlg = ka.signatureAlgorithm
 		}
+		c.x.noteSigAlg(c.peerSigAlg) // tlsx: Ext.SHA1Signature
 		if _, err := hs.c.writeHandshakeRecord(skx, &hs.finishedHash); err != nil {
 			return err
 		}
@@ -861,6 +862,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		}
 
 		c.peerSigAlg = certVerify.signatureAlgorithm
+		c.x.noteSigAlg(c.peerSigAlg) // tlsx: Ext.SHA1Signature
 
 		if err := transcriptMsg(certVerify, &hs.finishedHash); err != nil {
 			return err

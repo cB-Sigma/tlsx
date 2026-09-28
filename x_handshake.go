@@ -213,14 +213,18 @@ func helloExt(c *Conn, ch *clientHelloMsg) HelloExt {
 // ---- signature algorithm lists ----------------------------------------------
 
 // sigAlgsX is the signature_algorithms list for version: the configured
-// one (Config.Ext.SignatureSchemes) or def.
+// one (Config.Ext.SignatureSchemes) or def, with the SHA-1 schemes when
+// Config.Ext.AllowSHA1Signatures allows them (x_sha1.go).
 func (c *Config) sigAlgsX(def []SignatureScheme, version uint16) []SignatureScheme {
-	if c == nil || len(c.Ext.SignatureSchemes) == 0 {
+	if c == nil {
 		return def
 	}
-	return slices.DeleteFunc(slices.Clone(c.Ext.SignatureSchemes), func(s SignatureScheme) bool {
+	if len(c.Ext.SignatureSchemes) == 0 {
+		return c.sigAlgsSHA1X(def, version)
+	}
+	return c.sigAlgsSHA1X(slices.DeleteFunc(slices.Clone(c.Ext.SignatureSchemes), func(s SignatureScheme) bool {
 		return isDisabledSignatureAlgorithm(version, s, false)
-	})
+	}), version)
 }
 
 // sigAlgsCertX adds the configured schemes to signature_algorithms_cert.

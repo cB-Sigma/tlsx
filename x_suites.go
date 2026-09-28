@@ -311,7 +311,7 @@ func (ka *dheKeyAgreement) generateServerKeyExchange(config *Config, cert *Certi
 	if !ok {
 		return nil, fmt.Errorf("tls: certificate private key of type %T does not implement crypto.Signer", cert.PrivateKey)
 	}
-	ka.signatureAlgorithm, err = selectSignatureScheme(ka.version, cert, clientHello.supportedSignatureAlgorithms)
+	ka.signatureAlgorithm, err = selectSignatureSchemeX(config, ka.version, cert, clientHello.supportedSignatureAlgorithms)
 	if err != nil {
 		return nil, err
 	}

@@ -96,6 +96,9 @@ func TestGODEBUGTLSSHA1(t *testing.T) {
 	if got := server.ConnectionState().testingOnlyPeerSignatureAlgorithm; got != PKCS1WithSHA1 {
 		t.Errorf("client signed with %v", got)
 	}
+	if !client.ConnectionState().Ext.SHA1Signature || !server.ConnectionState().Ext.SHA1Signature {
+		t.Error("Ext.SHA1Signature not set")
+	}
 	// Server: own signature and the client's; client: the same.
 	if n := GODEBUGNonDefault("tlssha1") - before; n < 4 {
 		t.Errorf("tlssha1 non-default uses counted: %d, want at least 4", n)
@@ -107,4 +110,66 @@ func TestGODEBUGTLSSHA1(t *testing.T) {
 	if _, _, err := xPair(t, cc, sc); err != nil {
 		t.Fatalf("DefaultGODEBUG tlssha1=1: %v", err)
 	}
+}
+
+func TestAllowSHA1Signatures(t *testing.T) {
+	withGODEBUG(t, "-", "")
+	p := testPKI(t)
+	for _, leaf := range []xLeaf{p.rsa, p.ecdsa} {
+		name := "RSA"
+		scheme := PKCS1WithSHA1
+		if leaf.x509.PublicKeyAlgorithm != p.rsa.x509.PublicKeyAlgorithm {
+			name, scheme = "ECDSA", ECDSAWithSHA1
+		}
+		t.Run(name, func(t *testing.T) {
+			cfgs := func(clientAllow, serverAllow bool) (*Config, *Config) {
+				cc, sc := xConfigs(t, leaf)
+				cc.MaxVersion = VersionTLS12
+				cc.Ext.SignatureSchemes = []SignatureScheme{scheme, PKCS1WithSHA1}
+				sc.Ext.SignatureSchemes = []SignatureScheme{PKCS1WithSHA1}
+				cc.Ext.AllowSHA1Signatures, sc.Ext.AllowSHA1Signatures = clientAllow, serverAllow
+				return cc, sc
+			}
+			for _, tc := range []struct{ client, server bool }{{false, false}, {true, false}, {false, true}} {
+				cc, sc := cfgs(tc.client, tc.server)
+				if _, _, err := xPair(t, cc, sc); err == nil {
+					t.Fatalf("client %v server %v: SHA-1 handshake succeeded", tc.client, tc.server)
+				}
+			}
+			cc, sc := cfgs(true, true)
+			client, server, err := xPair(t, cc, sc)
+			if err != nil {
+				t.Fatalf("%v (server: %v)", err, server.Handshake())
+			}
+			if got := client.ConnectionState().testingOnlyPeerSignatureAlgorithm; got != scheme {
+				t.Errorf("server signed with %v", got)
+			}
+			if !client.ConnectionState().Ext.SHA1Signature || !server.ConnectionState().Ext.SHA1Signature {
+				t.Error("Ext.SHA1Signature not set")
+			}
+		})
+	}
+
+	t.Run("not used when something better is offered", func(t *testing.T) {
+		cc, sc := xConfigs(t, p.rsa)
+		cc.MaxVersion = VersionTLS12
+		cc.Ext.AllowSHA1Signatures, sc.Ext.AllowSHA1Signatures = true, true
+		client, server, err := xPair(t, cc, sc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if client.ConnectionState().Ext.SHA1Signature || server.ConnectionState().Ext.SHA1Signature {
+			t.Error("SHA-1 used although both sides prefer SHA-256")
+		}
+	})
+
+	t.Run("never in TLS 1.3", func(t *testing.T) {
+		cc, sc := xConfigs(t, p.rsa)
+		cc.MinVersion = VersionTLS13
+		cc.Ext.SignatureSchemes = []SignatureScheme{PKCS1WithSHA1}
+		cc.Ext.AllowSHA1Signatures, sc.Ext.AllowSHA1Signatures = true, true
+		if _, _, err := xPair(t, cc, sc); err == nil {
+			t.Fatal("TLS 1.3 handshake with only SHA-1 offered succeeded")
+		}
+	})
 }

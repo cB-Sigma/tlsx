@@ -134,6 +134,17 @@ type ConfigExt struct {
 	// certificates (ConnectionState().Ext.PeerAttributeCertificates).
 	AcceptAttributeCertificates bool
 
+	// AllowSHA1Signatures allows SHA-1 signatures (RSA PKCS #1 v1.5 and
+	// ECDSA with SHA-1) in TLS 1.2 handshakes for this Config, as GODEBUG
+	// tlssha1=1 does for the whole process: they are offered last, accepted
+	// from the peer, and made when the peer prefers them or accepts nothing
+	// else (also when a TLS 1.2 peer sends no signature_algorithms). It can
+	// only allow: false follows GODEBUG. TLS 1.3 never uses SHA-1
+	// signatures. ConnectionState().Ext.SHA1Signature reports their use.
+	// CertificateRequestInfo.SupportsCertificate, which has no Config,
+	// follows GODEBUG only.
+	AllowSHA1Signatures bool
+
 	// PSK configures pre-shared keys: TLS 1.2 PSK suites and TLS 1.3
 	// external PSKs (x_psk.go). Nil: none.
 	PSK *PSKConfig
@@ -187,6 +198,10 @@ type StateExt struct {
 	// PSKIdentity is the pre-shared key identity the handshake used (nil
 	// when none); PSKIdentityHint the TLS 1.2 server's hint a client got.
 	PSKIdentity, PSKIdentityHint []byte
+	// SHA1Signature says a TLS 1.2 handshake on the connection used a
+	// SHA-1 signature, by either side (Config.Ext.AllowSHA1Signatures,
+	// GODEBUG tlssha1=1).
+	SHA1Signature bool
 	// PeerRawPublicKey is the peer's raw public key (DER
 	// SubjectPublicKeyInfo, RFC 7250) when it authenticated with one;
 	// PeerCertificates is then empty. OwnRawPublicKey says this side sent

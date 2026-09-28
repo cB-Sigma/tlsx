@@ -15,6 +15,9 @@ import (
 
 // connExt is the per-connection state tlsx adds to Conn.
 type connExt struct {
+	// sha1Sig: a SHA-1 signature was made or verified (StateExt).
+	sha1Sig bool
+
 	// renegGate: Write holds it shared; a renegotiation holds it
 	// exclusively, so no application data is written while the handshake
 	// messages and the change of keys go out.
@@ -130,6 +133,7 @@ func (x *connExt) state(c *Conn, s *ConnectionState) {
 		s.Ext.SecureRenegotiation = x.peerSecureReneg
 	}
 	s.Ext.Handshakes = c.handshakes
+	s.Ext.SHA1Signature = x.sha1Sig
 	s.Ext.KeyUpdatesSent = x.keyUpdatesSent.Load()
 	s.Ext.KeyUpdatesReceived = x.keyUpdatesReceived.Load()
 	if t := x.lastKeyUpdate.Load(); t != 0 {

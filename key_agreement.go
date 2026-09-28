@@ -196,7 +196,7 @@ func (ka *ecdheKeyAgreement) generateServerKeyExchange(config *Config, cert *Cer
 
 	var sig []byte
 	if ka.version >= VersionTLS12 {
-		ka.signatureAlgorithm, err = selectSignatureScheme(ka.version, cert, clientHello.supportedSignatureAlgorithms)
+		ka.signatureAlgorithm, err = selectSignatureSchemeX(config, ka.version, cert, clientHello.supportedSignatureAlgorithms) // tlsx: Ext.AllowSHA1Signatures
 		if err != nil {
 			return nil, err
 		}
