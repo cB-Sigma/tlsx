@@ -181,6 +181,9 @@ func (hs *serverHandshakeStateTLS13) processClientHello() error {
 	if fips140tls.Required() {
 		preferenceList = allowedCipherSuitesTLS13FIPS
 	}
+	if l := c.config.Ext.CipherSuitesTLS13; len(l) > 0 { // tlsx
+		preferenceList = l
+	}
 	for _, suiteID := range preferenceList {
 		hs.suite = mutualCipherSuiteTLS13(hs.clientHello.cipherSuites, suiteID)
 		if hs.suite != nil {
@@ -206,7 +209,7 @@ func (hs *serverHandshakeStateTLS13) processClientHello() error {
 	// Finally, pick in our fixed preference order.
 	preferredGroups := c.config.curvePreferences(c.vers)
 	preferredGroups = slices.DeleteFunc(preferredGroups, func(group CurveID) bool {
-		return !slices.Contains(hs.clientHello.supportedCurves, group)
+		return !slices.Contains(hs.clientHello.supportedCurves, group) || isTLS12OnlyGroup(group) // tlsx
 	})
 	if len(preferredGroups) == 0 {
 		c.sendAlert(alertHandshakeFailure)
@@ -843,8 +846,8 @@ func (hs *serverHandshakeStateTLS13) sendServerCertificate() error {
 		certReq := new(certificateRequestMsgTLS13)
 		certReq.ocspStapling = true
 		certReq.scts = true
-		certReq.supportedSignatureAlgorithms = supportedSignatureAlgorithms(c.vers, c.vers)
-		certReq.supportedSignatureAlgorithmsCert = supportedSignatureAlgorithmsCert(c.vers, c.vers)
+		certReq.supportedSignatureAlgorithms = c.config.sigAlgsX(supportedSignatureAlgorithms(c.vers, c.vers), c.vers)     // tlsx
+		certReq.supportedSignatureAlgorithmsCert = c.config.sigAlgsCertX(supportedSignatureAlgorithmsCert(c.vers, c.vers)) // tlsx
 		if c.config.ClientCAs != nil {
 			certReq.certificateAuthorities = c.config.ClientCAs.Subjects()
 		}
@@ -1093,8 +1096,8 @@ func (hs *serverHandshakeStateTLS13) readClientCertificate() error {
 		// See RFC 8446, Section 4.4.3.
 		// We don't use certReq.supportedSignatureAlgorithms because it would
 		// require keeping the certificateRequestMsgTLS13 around in the hs.
-		if !isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, supportedSignatureAlgorithms(c.vers, c.vers)) ||
-			!isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, signatureSchemesForPublicKey(c.vers, c.peerCertificates[0].PublicKey)) {
+		if !isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, c.config.sigAlgsX(supportedSignatureAlgorithms(c.vers, c.vers), c.vers)) || // tlsx
+			!isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, signatureSchemesForCertificateX(c.vers, c.peerCertificates[0])) { // tlsx: PSS and brainpool keys
 			c.sendAlert(alertIllegalParameter)
 			return errors.New("tls: client certificate used with invalid signature algorithm")
 		}

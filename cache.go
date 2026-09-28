@@ -23,7 +23,7 @@ func (wcc *weakCertCache) newCert(der []byte) (*x509.Certificate, error) {
 		}
 	}
 
-	cert, err := x509.ParseCertificate(der)
+	cert, err := parseCertificateX(der) // tlsx
 	if err != nil {
 		return nil, err
 	}

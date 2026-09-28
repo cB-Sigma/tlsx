@@ -98,6 +98,9 @@ func InsecureCipherSuites() []*CipherSuite {
 // (e.g. "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"), or a fallback representation
 // of the ID value if the cipher suite is not implemented by this package.
 func CipherSuiteName(id uint16) string {
+	if n, ok := cipherSuiteNameX(id); ok { // tlsx
+		return n
+	}
 	for _, c := range CipherSuites() {
 		if c.ID == id {
 			return c.Name

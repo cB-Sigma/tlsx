@@ -304,7 +304,7 @@ func X509KeyPair(certPEMBlock, keyPEMBlock []byte) (Certificate, error) {
 
 	// We don't need to parse the public key for TLS, but we so do anyway
 	// to check that it looks sane and matches the private key.
-	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+	x509Cert, err := parseCertificateX(cert.Certificate[0]) // tlsx: PSS and brainpool keys
 	if err != nil {
 		return fail(err)
 	}
@@ -325,6 +325,9 @@ func X509KeyPair(certPEMBlock, keyPEMBlock []byte) (Certificate, error) {
 			return fail(errors.New("tls: private key does not match public key"))
 		}
 	case *ecdsa.PublicKey:
+		if ownKeyMatches(cert.PrivateKey, pub) { // tlsx: brainpool
+			break
+		}
 		priv, ok := cert.PrivateKey.(*ecdsa.PrivateKey)
 		if !ok {
 			return fail(errors.New("tls: private key type does not match public key type"))
@@ -368,6 +371,9 @@ func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
 		key, err = x509.ParseECPrivateKey(der)
 	}
 	if err != nil {
+		if key, err := parsePrivateKeyX(der); err == nil { // tlsx: PSS and brainpool keys
+			return key, nil
+		}
 		return nil, fmt.Errorf("tls: failed to parse private key: %w", pkcs8Err)
 	}
 	switch key := key.(type) {

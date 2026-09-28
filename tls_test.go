@@ -1656,6 +1656,9 @@ func TestCipherSuites(t *testing.T) {
 	}
 
 	for _, c := range cipherSuites {
+		if isTLSXSuite(c.id) {
+			continue // tlsx: not in upstream's public lists (CipherSuiteName knows them)
+		}
 		cc := CipherSuiteByID(c.id)
 		if cc == nil {
 			t.Errorf("%#04x: no CipherSuite entry", c.id)
@@ -1683,6 +1686,9 @@ func TestCipherSuites(t *testing.T) {
 		}
 	}
 	for _, c := range cipherSuitesTLS13 {
+		if isTLSXSuite(c.id) {
+			continue // tlsx
+		}
 		cc := CipherSuiteByID(c.id)
 		if cc == nil {
 			t.Errorf("%#04x: no CipherSuite entry", c.id)
@@ -1714,6 +1720,9 @@ func TestCipherSuites(t *testing.T) {
 
 	// Check that disabled suites are marked insecure.
 	for id := range disabledCipherSuites {
+		if isTLSXSuite(id) {
+			continue // tlsx
+		}
 		c := CipherSuiteByID(id)
 		if c == nil {
 			t.Errorf("%#04x: no CipherSuite entry", id)
@@ -1728,6 +1737,7 @@ func TestCipherSuites(t *testing.T) {
 		// Check that insecure and HTTP/2 bad cipher suites are at the end of
 		// the preference lists.
 		var sawInsecure, sawBad bool
+		prefOrder = slices.DeleteFunc(slices.Clone(prefOrder), isTLSXSuite) // tlsx: upstream's rules only
 		for _, id := range prefOrder {
 			c := CipherSuiteByID(id)
 			if c == nil {

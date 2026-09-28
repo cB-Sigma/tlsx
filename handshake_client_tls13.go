@@ -54,7 +54,7 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 	}
 
 	// Consistency check on the presence of a keyShare and its parameters.
-	if hs.keyShareKeys == nil || (hs.keyShareKeys.ecdhe == nil && hs.keyShareKeys.mlkem == nil) ||
+	if hs.keyShareKeys == nil || (hs.keyShareKeys.ecdhe == nil && hs.keyShareKeys.mlkem == nil && hs.keyShareKeys.x == nil) || // tlsx: or a finite field / brainpool key
 		len(hs.hello.keyShares) == 0 {
 		return c.sendAlert(alertInternalError)
 	}
@@ -666,8 +666,8 @@ func (hs *clientHandshakeStateTLS13) readServerCertificate() error {
 	// See RFC 8446, Section 4.4.3.
 	// We don't use hs.hello.supportedSignatureAlgorithms because it might
 	// include PKCS#1 v1.5 and SHA-1 if the ClientHello also supported TLS 1.2.
-	if !isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, supportedSignatureAlgorithms(c.vers, c.vers)) ||
-		!isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, signatureSchemesForPublicKey(c.vers, c.peerCertificates[0].PublicKey)) {
+	if !isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, c.config.sigAlgsX(supportedSignatureAlgorithms(c.vers, c.vers), c.vers)) || // tlsx
+		!isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, signatureSchemesForCertificateX(c.vers, c.peerCertificates[0])) { // tlsx: PSS and brainpool keys
 		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: certificate used with invalid signature algorithm")
 	}

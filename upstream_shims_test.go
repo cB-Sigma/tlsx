@@ -19,6 +19,13 @@ func (byteorderShim) BEUint16(b []byte) uint16 { return binary.BigEndian.Uint16(
 // isFIPSVersion is only asked in FIPS mode, which tlsx does not have.
 func isFIPSVersion(uint16) bool { return false }
 
+// isTLSXSuite reports a cipher suite tlsx adds (the upstream tests check
+// upstream's lists and recordings).
+func isTLSXSuite(id uint16) bool {
+	_, ok := tlsxSuiteNames[id]
+	return ok
+}
+
 // testConfigFIPS140 is declared in upstream's fips140_test.go, which tlsx
 // does not carry (no FIPS mode); upstream's TestMain still fills it.
 var testConfigFIPS140 *Config

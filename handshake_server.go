@@ -410,6 +410,7 @@ func (hs *serverHandshakeState) pickCipherSuite() error {
 		return fmt.Errorf("tls: no cipher suite supported by both client and server; client offered: %x",
 			hs.clientHello.cipherSuites)
 	}
+	hs.staticDHServerCert() // tlsx: static DH uses its own certificate
 	c.cipherSuite = hs.suite.id
 
 	for _, id := range hs.clientHello.cipherSuites {
@@ -427,6 +428,9 @@ func (hs *serverHandshakeState) pickCipherSuite() error {
 }
 
 func (hs *serverHandshakeState) cipherSuiteOk(c *cipherSuite) bool {
+	if ok, decided := hs.cipherSuiteOkX(c); decided { // tlsx: DHE, encrypt_then_mac
+		return ok
+	}
 	if c.flags&suiteECDHE != 0 {
 		if !hs.ecdheOk {
 			return false
@@ -652,6 +656,10 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 			c.curveID = keyAgreement.curveID
 			c.peerSigAlg = keyAgreement.signatureAlgorithm
 		}
+		if ka, ok := keyAgreement.(*dheKeyAgreement); ok { // tlsx
+			c.curveID = ka.group
+			c.peerSigAlg = ka.signatureAlgorithm
+		}
 		if _, err := hs.c.writeHandshakeRecord(skx, &hs.finishedHash); err != nil {
 			return err
 		}
@@ -667,7 +675,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		}
 		if c.vers >= VersionTLS12 {
 			certReq.hasSignatureAlgorithm = true
-			certReq.supportedSignatureAlgorithms = supportedSignatureAlgorithms(c.vers, c.vers)
+			certReq.supportedSignatureAlgorithms = c.config.sigAlgsX(supportedSignatureAlgorithms(c.vers, c.vers), c.vers) // tlsx
 		}
 
 		// An empty list of certificateAuthorities signals to
@@ -959,7 +967,7 @@ func (c *Conn) processCertsFromClient(certificate Certificate) error {
 	certs := make([]*x509.Certificate, len(certificates))
 	var err error
 	for i, asn1Data := range certificates {
-		if certs[i], err = x509.ParseCertificate(asn1Data); err != nil {
+		if certs[i], err = parseCertificateX(asn1Data); err != nil { // tlsx: PSS and brainpool keys
 			c.sendAlert(alertDecodeError)
 			return errors.New("tls: failed to parse client certificate: " + err.Error())
 		}

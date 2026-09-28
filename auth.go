@@ -133,6 +133,9 @@ func signedMessage(context string, transcript hash.Hash) []byte {
 // typeAndHashFromSignatureScheme returns the corresponding signature type and
 // crypto.Hash for a given TLS SignatureScheme.
 func typeAndHashFromSignatureScheme(signatureAlgorithm SignatureScheme) (sigType uint8, hash crypto.Hash, err error) {
+	if t, h, ok := typeAndHashX(signatureAlgorithm); ok { // tlsx: rsa_pss_pss, brainpool
+		return t, h, nil
+	}
 	switch signatureAlgorithm {
 	case PKCS1WithSHA1, PKCS1WithSHA256, PKCS1WithSHA384, PKCS1WithSHA512:
 		sigType = signaturePKCS1v15
@@ -263,7 +266,7 @@ func selectSignatureScheme(vers uint16, c *Certificate, peerAlgs []SignatureSche
 	if !ok {
 		return 0, unsupportedCertificateError(c)
 	}
-	supportedAlgs := signatureSchemesForPublicKey(vers, priv.Public())
+	supportedAlgs := signatureSchemesForOwnX(vers, c, priv.Public()) // tlsx: PSS and brainpool keys
 	if c.SupportedSignatureAlgorithms != nil {
 		supportedAlgs = slices.DeleteFunc(supportedAlgs, func(sigAlg SignatureScheme) bool {
 			return !isSupportedSignatureAlgorithm(sigAlg, c.SupportedSignatureAlgorithms)

@@ -158,7 +158,8 @@ const (
 
 func isTLS13OnlyKeyExchange(curve CurveID) bool {
 	switch curve {
-	case X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM1024:
+	case X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM1024,
+		BrainpoolP256r1TLS13, BrainpoolP384r1TLS13, BrainpoolP512r1TLS13: // tlsx
 		return true
 	default:
 		return false
@@ -1277,7 +1278,7 @@ func supportedVersionsFromMax(maxVersion uint16) []uint16 {
 }
 
 func (c *Config) curvePreferences(version uint16) []CurveID {
-	return slices.DeleteFunc(curvePreferenceOrder(), func(x CurveID) bool {
+	return slices.DeleteFunc(c.curvePreferencesX(curvePreferenceOrder()), func(x CurveID) bool { // tlsx: ffdhe and brainpool groups
 		return !c.supportsCurve(version, x)
 	})
 }
@@ -1288,7 +1289,7 @@ func (c *Config) supportsCurve(version uint16, x CurveID) bool {
 			return false
 		}
 		// Ignore unimplemented entries in c.CurvePreferences.
-		if !slices.Contains(curvePreferenceOrder(), x) {
+		if !slices.Contains(curvePreferenceOrder(), x) && !slices.Contains(tlsxGroups, x) { // tlsx
 			return false
 		}
 	} else {
@@ -1557,7 +1558,7 @@ func (cri *CertificateRequestInfo) SupportsCertificate(c *Certificate) error {
 		// chain.Leaf was nil.
 		if j != 0 || x509Cert == nil {
 			var err error
-			if x509Cert, err = x509.ParseCertificate(cert); err != nil {
+			if x509Cert, err = parseCertificateX(cert); err != nil { // tlsx
 				return fmt.Errorf("failed to parse certificate #%d in the chain: %w", j, err)
 			}
 		}
@@ -1660,7 +1661,7 @@ func (c *Certificate) leaf() (*x509.Certificate, error) {
 	if c.Leaf != nil {
 		return c.Leaf, nil
 	}
-	return x509.ParseCertificate(c.Certificate[0])
+	return parseCertificateX(c.Certificate[0]) // tlsx
 }
 
 type handshakeMessage interface {

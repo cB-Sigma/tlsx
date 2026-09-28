@@ -153,11 +153,12 @@ type ecdheKeyAgreement struct {
 	curveID            CurveID
 	signatureAlgorithm SignatureScheme
 	key                *ecdh.PrivateKey
+	bpKey              []byte // tlsx: brainpool scalar (x_groups.go)
 }
 
 func (ka *ecdheKeyAgreement) generateServerKeyExchange(config *Config, cert *Certificate, clientHello *clientHelloMsg, hello *serverHelloMsg) (*serverKeyExchangeMsg, error) {
 	for _, c := range clientHello.supportedCurves {
-		if config.supportsCurve(ka.version, c) {
+		if config.supportsCurve(ka.version, c) && !isFFDHE(c) { // tlsx: finite field groups are for DHE
 			ka.curveID = c
 			break
 		}
@@ -166,18 +167,17 @@ func (ka *ecdheKeyAgreement) generateServerKeyExchange(config *Config, cert *Cer
 	if ka.curveID == 0 {
 		return nil, errors.New("tls: no supported elliptic curves offered")
 	}
-	if _, ok := curveForCurveID(ka.curveID); !ok {
+	if _, ok := curveForCurveID(ka.curveID); !ok && !isBrainpool(ka.curveID) { // tlsx
 		return nil, errors.New("tls: internal error: supportsCurve accepted unimplemented curve")
 	}
 
-	key, err := generateECDHEKey(config.rand(), ka.curveID)
+	// tlsx: generateKey covers crypto/ecdh and the brainpool curves.
+	ecdhePublic, err := ka.generateKey(config.rand())
 	if err != nil {
 		return nil, err
 	}
-	ka.key = key
 
 	// See RFC 4492, Section 5.4.
-	ecdhePublic := key.PublicKey().Bytes()
 	serverECDHEParams := make([]byte, 1+2+1+len(ecdhePublic))
 	serverECDHEParams[0] = 3 // named curve
 	serverECDHEParams[1] = byte(ka.curveID >> 8)
@@ -256,11 +256,7 @@ func (ka *ecdheKeyAgreement) processClientKeyExchange(config *Config, cert *Cert
 		return nil, errClientKeyExchange
 	}
 
-	peerKey, err := ka.key.Curve().NewPublicKey(ckx.ciphertext[1:])
-	if err != nil {
-		return nil, errClientKeyExchange
-	}
-	preMasterSecret, err := ka.key.ECDH(peerKey)
+	preMasterSecret, err := ka.sharedSecret(ckx.ciphertext[1:]) // tlsx
 	if err != nil {
 		return nil, errClientKeyExchange
 	}
@@ -309,26 +305,20 @@ func (ka *ecdheKeyAgreement) processServerKeyExchange(config *Config, clientHell
 		return errors.New("tls: server selected unoffered curve")
 	}
 
-	if _, ok := curveForCurveID(ka.curveID); !ok {
+	if _, ok := curveForCurveID(ka.curveID); !ok && !isBrainpool(ka.curveID) { // tlsx
 		return errors.New("tls: server selected unsupported curve")
 	}
 
-	key, err := generateECDHEKey(config.rand(), ka.curveID)
+	// tlsx: generateKey and sharedSecret cover crypto/ecdh and brainpool.
+	ourPublicKey, err := ka.generateKey(config.rand())
 	if err != nil {
 		return err
 	}
-	ka.key = key
-
-	peerKey, err := key.Curve().NewPublicKey(publicKey)
-	if err != nil {
-		return errServerKeyExchange
-	}
-	ka.preMasterSecret, err = key.ECDH(peerKey)
+	ka.preMasterSecret, err = ka.sharedSecret(publicKey)
 	if err != nil {
 		return errServerKeyExchange
 	}
 
-	ourPublicKey := key.PublicKey().Bytes()
 	ka.ckx = new(clientKeyExchangeMsg)
 	ka.ckx.ciphertext = make([]byte, 1+len(ourPublicKey))
 	ka.ckx.ciphertext[0] = byte(len(ourPublicKey))

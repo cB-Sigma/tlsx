@@ -28,7 +28,7 @@ func (c *cipherSuiteTLS13) nextTrafficSecret(trafficSecret []byte) []byte {
 // trafficKey generates traffic keys according to RFC 8446, Section 7.3.
 func (c *cipherSuiteTLS13) trafficKey(trafficSecret []byte) (key, iv []byte) {
 	key = tls13.ExpandLabel(c.hash.New, trafficSecret, "key", nil, c.keyLen)
-	iv = tls13.ExpandLabel(c.hash.New, trafficSecret, "iv", nil, aeadNonceLength)
+	iv = tls13.ExpandLabel(c.hash.New, trafficSecret, "iv", nil, c.ivLen()) // tlsx: RFC 9150 suites have longer IVs
 	return
 }
 
@@ -54,6 +54,7 @@ func (c *cipherSuiteTLS13) exportKeyingMaterial(s *tls13.MasterSecret, transcrip
 type keySharePrivateKeys struct {
 	ecdhe *ecdh.PrivateKey
 	mlkem crypto.Decapsulator
+	x     []byte // tlsx: finite field or brainpool private key (x_groups.go)
 }
 
 // A keyExchange implements a TLS 1.3 KEM.
@@ -110,6 +111,9 @@ func keyExchangeForCurveID(id CurveID) (keyExchange, error) {
 	case MLKEM1024:
 		return &mlkem1024KeyExchange{}, nil
 	default:
+		if ke := keyExchangeForCurveIDX(id); ke != nil { // tlsx
+			return ke, nil
+		}
 		return nil, errors.New("tls: unsupported key exchange")
 	}
 }

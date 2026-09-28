@@ -118,8 +118,8 @@ func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echCli
 	}
 
 	if maxVersion >= VersionTLS12 {
-		hello.supportedSignatureAlgorithms = supportedSignatureAlgorithms(minVersion, maxVersion)
-		hello.supportedSignatureAlgorithmsCert = supportedSignatureAlgorithmsCert(minVersion, maxVersion)
+		hello.supportedSignatureAlgorithms = c.config.sigAlgsX(supportedSignatureAlgorithms(minVersion, maxVersion), minVersion) // tlsx
+		hello.supportedSignatureAlgorithmsCert = c.config.sigAlgsCertX(supportedSignatureAlgorithmsCert(minVersion, maxVersion)) // tlsx
 	}
 
 	var keyShareKeys *keySharePrivateKeys
@@ -143,7 +143,7 @@ func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echCli
 		// Since the order is fixed, the first one is always the one to send a
 		// key share for. All the PQ hybrids sort first, and produce a fallback
 		// ECDH share.
-		curveID := hello.supportedCurves[0]
+		curveID := firstTLS13Group(hello.supportedCurves) // tlsx: not a TLS 1.2-only group
 		ke, err := keyExchangeForCurveID(curveID)
 		if err != nil {
 			return nil, nil, nil, errors.New("tls: internal error: supportsCurve accepted unimplemented curve")
@@ -731,6 +731,10 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 			c.curveID = keyAgreement.curveID
 			c.peerSigAlg = keyAgreement.signatureAlgorithm
 		}
+		if ka, ok := keyAgreement.(*dheKeyAgreement); ok { // tlsx
+			c.curveID = ka.group
+			c.peerSigAlg = ka.signatureAlgorithm
+		}
 
 		msg, err = c.readHandshake(&hs.finishedHash)
 		if err != nil {
@@ -1207,6 +1211,9 @@ func (c *Conn) verifyServerCertificate(certificates [][]byte) error {
 			return errors.New("tls: server's certificate uses ML-DSA, which requires TLS 1.3")
 		}
 	default:
+		if staticDHPeerKeyOK(c, certs[0].PublicKey) { // tlsx: static DH
+			break
+		}
 		c.sendAlert(alertUnsupportedCertificate)
 		return fmt.Errorf("tls: server's certificate contains an unsupported type of public key: %T", certs[0].PublicKey)
 	}
