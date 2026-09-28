@@ -1422,6 +1422,7 @@ func TestRenegotiationRejected(t *testing.T) {
 }
 
 func TestRenegotiateOnce(t *testing.T) {
+	t.Skip("tlsx: a renegotiation ClientHello offers only the connection's version, so the recorded upstream flight differs; x_openssl_test.go runs renegotiation against OpenSSL")
 	config := testConfigClient.Clone()
 	config.Renegotiation = RenegotiateOnceAsClient
 
@@ -1436,6 +1437,7 @@ func TestRenegotiateOnce(t *testing.T) {
 }
 
 func TestRenegotiateTwice(t *testing.T) {
+	t.Skip("tlsx: a renegotiation ClientHello offers only the connection's version, so the recorded upstream flight differs; x_openssl_test.go runs renegotiation against OpenSSL")
 	config := testConfigClient.Clone()
 	config.Renegotiation = RenegotiateFreelyAsClient
 
@@ -1450,6 +1452,7 @@ func TestRenegotiateTwice(t *testing.T) {
 }
 
 func TestRenegotiateTwiceRejected(t *testing.T) {
+	t.Skip("tlsx: a renegotiation ClientHello offers only the connection's version, so the recorded upstream flight differs; x_openssl_test.go runs renegotiation against OpenSSL")
 	config := testConfigClient.Clone()
 	config.Renegotiation = RenegotiateOnceAsClient
 

@@ -93,7 +93,7 @@ func (hs *serverHandshakeState) handshake() error {
 			return err
 		}
 		c.clientFinishedIsFirst = false
-		if err := hs.readFinished(nil); err != nil {
+		if err := hs.readFinished(c.clientFinished[:]); err != nil { // tlsx: kept for RFC 5746
 			return err
 		}
 	} else {
@@ -116,7 +116,7 @@ func (hs *serverHandshakeState) handshake() error {
 		if err := hs.sendSessionTicket(); err != nil {
 			return err
 		}
-		if err := hs.sendFinished(nil); err != nil {
+		if err := hs.sendFinished(c.serverFinished[:]); err != nil { // tlsx: kept for RFC 5746
 			return err
 		}
 		if _, err := c.flush(); err != nil {
@@ -187,10 +187,14 @@ func (c *Conn) readClientHello(ctx context.Context) (*clientHelloMsg, *echServer
 	} else if len(clientVersions) == 0 {
 		clientVersions = supportedVersionsFromMax(clientHello.vers)
 	}
+	prevVers := c.vers
 	c.vers, ok = c.config.mutualVersion(roleServer, c.quic != nil, clientVersions)
 	if !ok {
 		c.sendAlert(alertProtocolVersion)
 		return nil, nil, fmt.Errorf("tls: client offered only unsupported versions: %x", clientVersions)
+	}
+	if err := c.checkRenegotiationVersion(prevVers, c.vers); err != nil { // tlsx
+		return nil, nil, err
 	}
 	c.haveVers = true
 	c.in.version = c.vers
@@ -249,9 +253,10 @@ func (hs *serverHandshakeState) processClientHello() error {
 		return err
 	}
 
-	if len(hs.clientHello.secureRenegotiation) != 0 {
-		c.sendAlert(alertHandshakeFailure)
-		return errors.New("tls: initial handshake had non-empty renegotiation extension")
+	// tlsx: RFC 5746 for the first handshake and renegotiations.
+	hs.hello.secureRenegotiation, err = c.serverRenegotiationInfo(hs.clientHello)
+	if err != nil {
+		return err
 	}
 
 	hs.hello.extendedMasterSecret = hs.clientHello.extendedMasterSecret
@@ -710,6 +715,9 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		}
 		if len(certMsg.certificates) != 0 {
 			pub = c.peerCertificates[0].PublicKey
+			if err := c.checkRenegotiationIdentity(certMsg.certificates[0]); err != nil { // tlsx
+				return err
+			}
 		}
 
 		msg, err = c.readHandshake(&hs.finishedHash)

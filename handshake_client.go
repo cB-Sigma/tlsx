@@ -57,7 +57,7 @@ func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echCli
 		return nil, nil, nil, errors.New("tls: NextProtos values too large")
 	}
 
-	supportedVersions := config.supportedVersions(roleClient, c.quic != nil)
+	supportedVersions := c.renegotiationVersions(config.supportedVersions(roleClient, c.quic != nil)) // tlsx
 	if len(supportedVersions) == 0 {
 		return nil, nil, nil, errors.New("tls: no supported versions satisfy MinVersion and MaxVersion")
 	}
@@ -287,6 +287,11 @@ func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 	if _, err := c.writeHandshakeRecord(hello, nil); err != nil {
 		return err
 	}
+	if c.x.acquireIn != nil { // tlsx: a renegotiation started outside Read
+		if err := c.x.acquireIn(); err != nil {
+			return err
+		}
+	}
 
 	if hello.earlyData {
 		suite := cipherSuiteTLS13ByID(session.cipherSuite)
@@ -314,7 +319,11 @@ func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 		return unexpectedMessageError(serverHello, msg)
 	}
 
+	prevVers := c.vers
 	if err := c.pickTLSVersion(serverHello); err != nil {
+		return err
+	}
+	if err := c.checkRenegotiationVersion(prevVers, c.vers); err != nil { // tlsx
 		return err
 	}
 
@@ -383,7 +392,7 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (
 	// Session resumption is not allowed if renegotiating because
 	// renegotiation is primarily used to allow a client to send a client
 	// certificate, which would be skipped if session resumption occurred.
-	if c.handshakes != 0 {
+	if c.handshakes != 0 && !c.x.renegResume { // tlsx: Resume offers the session
 		return nil, nil, nil, nil
 	}
 
@@ -689,10 +698,11 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		}
 	}
 
-	if c.handshakes == 0 {
-		// If this is the first handshake on a connection, process and
-		// (optionally) verify the server's certificates.
+	if true { // tlsx: every handshake, renegotiations included, verifies the chain
 		if err := c.verifyServerCertificate(certMsg.certificates); err != nil {
+			return err
+		}
+		if err := c.checkRenegotiationIdentity(certMsg.certificates[0]); err != nil {
 			return err
 		}
 	} else {
@@ -929,7 +939,7 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 		copy(expectedSecureRenegotiation[12:], c.serverFinished[:])
 		if !bytes.Equal(hs.serverHello.secureRenegotiation, expectedSecureRenegotiation[:]) {
 			c.sendAlert(alertHandshakeFailure)
-			return false, errors.New("tls: incorrect renegotiation extension contents")
+			return false, fmt.Errorf("%w: incorrect renegotiation extension contents", ErrInsecureRenegotiation) // tlsx: wrapped
 		}
 	}
 

@@ -734,6 +734,9 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		}
 		switch data[0] {
 		case alertLevelWarning:
+			if alert(data[1]) == alertNoRenegotiation && c.x.noteNoRenegotiation() { // tlsx
+				return errPeerRefusedRenegotiation
+			}
 			// Drop the record on the floor and retry.
 			return c.retryReadRecord(expectChangeCipherSpec)
 		case alertLevelError:
@@ -766,6 +769,10 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		}
 
 	case recordTypeApplicationData:
+		if !handshakeComplete && !expectChangeCipherSpec && c.x.renegotiating && len(data) > 0 { // tlsx
+			c.x.pendingApp = append(c.x.pendingApp, data...)
+			return nil
+		}
 		if !handshakeComplete || expectChangeCipherSpec {
 			return c.in.setErrorLocked(c.sendAlert(alertUnexpectedMessage))
 		}
@@ -1211,6 +1218,10 @@ func (c *Conn) Write(b []byte) (int, error) {
 	}
 	defer c.activeCall.Add(-2)
 
+	// tlsx: application data waits while a renegotiation runs.
+	c.x.renegGate.RLock()
+	defer c.x.renegGate.RUnlock()
+
 	if err := c.Handshake(); err != nil {
 		return 0, err
 	}
@@ -1256,6 +1267,12 @@ func (c *Conn) Write(b []byte) (int, error) {
 
 // handleRenegotiation processes a HelloRequest handshake message.
 func (c *Conn) handleRenegotiation() error {
+	return c.handleRenegotiationX() // tlsx: x_renegotiation.go
+}
+
+// handleRenegotiationUpstream is upstream's handleRenegotiation (kept for
+// diffs against upstream; not called).
+func (c *Conn) handleRenegotiationUpstream() error {
 	if c.vers == VersionTLS13 {
 		return errors.New("tls: internal error: unexpected renegotiation")
 	}
@@ -1359,12 +1376,14 @@ func (c *Conn) handleKeyUpdate(keyUpdate *keyUpdateMsg) error {
 
 		newSecret := cipherSuite.nextTrafficSecret(c.out.trafficSecret)
 		c.setWriteTrafficSecret(cipherSuite, QUICEncryptionLevelInitial, newSecret)
+		c.x.keyUpdateSent(c, false) // tlsx
 	}
 
 	newSecret := cipherSuite.nextTrafficSecret(c.in.trafficSecret)
 	if err := c.setReadTrafficSecret(cipherSuite, QUICEncryptionLevelInitial, newSecret, keyUpdate.updateRequested); err != nil {
 		return err
 	}
+	c.x.keyUpdateReceived(c, keyUpdate.updateRequested) // tlsx
 
 	return nil
 }
@@ -1389,10 +1408,19 @@ func (c *Conn) Read(b []byte) (int, error) {
 	defer c.in.Unlock()
 
 	for c.input.Len() == 0 {
+		if c.x.yieldIn(c) { // tlsx: a renegotiation on another goroutine reads
+			continue
+		}
 		if err := c.readRecord(); err != nil {
+			if err == errPeerRefusedRenegotiation {
+				continue
+			}
 			return 0, err
 		}
 		for c.hand.Len() > 0 {
+			if c.x.yieldIn(c) { // tlsx
+				continue
+			}
 			if err := c.handlePostHandshakeMessage(); err != nil {
 				return 0, err
 			}
