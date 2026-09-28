@@ -49,7 +49,7 @@ tlsx is that fork, kept as close to Go as possible:
 | Pre-shared keys, TLS 1.2 PSK suites and TLS 1.3 external PSK | no | yes, with TLS 1.2 PSK session resumption |
 | Raw public keys (RFC 7250) | no | yes |
 | TLS 1.2 renegotiation | client may accept only | client and server, RFC 5746 required |
-| TLS 1.3 key update | answers the peer's | also sends on demand |
+| TLS 1.3 key update | answers the peer's | also sends on demand; also accepts a peer's timed updates on idle links, opt-in |
 | Finite-field DHE (RFC 7919 groups) | no | yes |
 | AES-CCM and CCM_8 suites | no | yes |
 | Brainpool curves | no | yes |
@@ -96,7 +96,8 @@ behaves like crypto/tls of its base Go release. Every addition is opt-in:
   - No certificate needed.
 - **Raw public keys** (RFC 7250). TLS 1.2 and 1.3, both directions, trusted through a pinning callback.
 - **TLS 1.2 secure renegotiation** (RFC 5746) in both roles, and TLS 1.2 resumption by session ID.
-- **TLS 1.3 KeyUpdate on demand** (`Conn.SendKeyUpdate`).
+- **TLS 1.3 KeyUpdate on demand** (`Conn.SendKeyUpdate`), and a peer's
+  timed KeyUpdates on idle links (`Ext.MinKeyUpdateInterval`, below).
 - **Extra cipher suites.**
   - TLS_DHE_RSA_WITH_AES_128/256_GCM on the RFC 7919 groups.
   - ECDHE CBC-SHA384 (RFC 5289).
@@ -167,6 +168,35 @@ keys and raw public keys.
 tlsx's `Config` and `Conn` are distinct types from crypto/tls's. Code that
 takes a `*tls.Config`, such as `net/http`, needs an adapter, for example a
 `net.Listener` that returns tlsx connections.
+
+## Timed key updates on idle links
+
+Since Go 1.26.6, crypto/tls closes a connection after more than 16
+post-handshake messages in a row with no application data, and a TLS 1.3
+KeyUpdate no longer counts as data. This stops a peer from making the other
+side derive keys without end. It also drops a peer that renews its keys on
+a timer over a link that carries no data, as IEC 62351-3 devices on
+OpenSSL or mbedTLS may: the 17th renewal ends the connection.
+
+`Config.Ext.MinKeyUpdateInterval` allows for such peers, and is off by
+default:
+
+```go
+cfg.Ext.MinKeyUpdateInterval = renewal / 2 // the peer renews every `renewal`
+```
+
+- A KeyUpdate that arrives at least the interval after the last one that
+  counted (or after the handshake) counts as progress, like data.
+- Faster KeyUpdates count as in crypto/tls, so a flood is still cut off at
+  the same limit. Key derivations stay bounded by one per interval plus 16.
+- The count of ignored messages is not reset, only not increased; data
+  still resets it as in crypto/tls.
+- Time is taken from `Config.Time` when the record is read, so keep a
+  reader on the connection. Choose the interval with a margin below the
+  peer's period (half is a good default); a very short one gives back most
+  of the protection.
+- With zero, tlsx behaves exactly as crypto/tls; a test checks this
+  against the toolchain's crypto/tls.
 
 ## Certificate revocation
 
@@ -277,6 +307,7 @@ the last local run.
 | Feature | Checked against | Directions |
 |---|---|---|
 | TLS 1.3 KeyUpdate | OpenSSL 3.6.4 | Go client ↔ s_server, s_client ↔ Go server |
+| Timed KeyUpdates on an idle link (`MinKeyUpdateInterval`): 24 updates with no data survive; without it the connection is dropped at the limit | OpenSSL 3.6.4 (`k` command) | both roles |
 | TLS 1.2 renegotiation (RFC 5746), incl. HelloRequest and refusals | OpenSSL 3.6.4 | both roles |
 | DHE_RSA GCM suites on ffdhe2048; refusal of custom groups | OpenSSL 3.6.4 | both roles |
 | ffdhe2048 key share in TLS 1.3 | OpenSSL 3.6.4 | both roles |
@@ -393,6 +424,11 @@ flags neither Go's shim nor tlsx's implement, and those Go's
 - **SHA-1.** Go's `bogo_config.json` disables BoGo's 23 SHA-1 signature
   tests. Run with them enabled, Go and tlsx agree test by test: 19 fail
   and 4 pass by default, all 23 pass with GODEBUG `tlssha1=1`.
+- **`MinKeyUpdateInterval`.** `TLSX_BOGO_MIN_KEY_UPDATE_INTERVAL` (not
+  a BoGo flag) sets the option in the shim. With `1h` every result is the
+  same as without it, test by test; BoGo's flood test TooManyKeyUpdates
+  still passes. With `1ns`, which gives the protection back, that test
+  fails, as it should.
 - **What BoGo cannot cover**, because BoringSSL does not implement it:
   TLS 1.3 external PSKs, finite-field DHE (DHE_RSA, DHE_PSK), AES-CCM,
   raw public keys, max_fragment_length, encrypt_then_mac, brainpool,

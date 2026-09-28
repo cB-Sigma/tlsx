@@ -3,6 +3,23 @@
 All notable changes to tlsx. Versions follow semantic versioning; before
 v1.0.0, minor versions may change the API.
 
+## v0.4.0 (2026-09-28)
+
+- **`Config.Ext.MinKeyUpdateInterval`** accepts a TLS 1.3 peer's timed
+  KeyUpdates on an idle connection. Since Go 1.26.6, crypto/tls (and tlsx
+  by default) closes a connection after more than 16 post-handshake
+  messages in a row with no application data, KeyUpdates included, so a
+  peer renewing its keys on a timer over an idle link (IEC 62351-3) was
+  dropped at its 17th renewal. With the option, a KeyUpdate that arrives
+  at least the interval after the last one that counted counts as
+  progress; faster ones still count, so a flood is refused at the same
+  limit. Zero, the default, is crypto/tls's behaviour; a test compares it
+  with the toolchain's crypto/tls. Tested against OpenSSL 3.6.4 in both
+  roles: 24 idle updates survive with the option, and the connection is
+  dropped at the limit without it. BoGo results are unchanged, also with
+  the option set in the shim (`TLSX_BOGO_MIN_KEY_UPDATE_INTERVAL=1h`,
+  test by test); with `1ns` BoGo's TooManyKeyUpdates fails, as it should.
+
 ## v0.3.0 (2026-09-28)
 
 - **BoGo.** BoringSSL's conformance suite runs against tlsx

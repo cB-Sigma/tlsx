@@ -31,7 +31,9 @@
 //
 //   - TLS 1.3 key update on demand: Conn.SendKeyUpdate (RFC 8446 4.6.3);
 //     counts and times in ConnectionState().Ext, events through
-//     Config.Ext.Observer.
+//     Config.Ext.Observer. Config.Ext.MinKeyUpdateInterval accepts a
+//     peer's timed updates on an idle connection, which crypto/tls drops
+//     after 16.
 //   - TLS 1.2 secure renegotiation (RFC 5746) in both roles: Conn.Renegotiate
 //     (full, certificates validated again), Conn.Resume (abbreviated: the
 //     session resumed on the connection for new keys),
