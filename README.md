@@ -56,6 +56,7 @@ tlsx is that fork, kept as close to Go as possible:
 | encrypt_then_mac (RFC 7366) | no | yes |
 | Integrity-only and NULL suites | no | yes, opt-in (no confidentiality) |
 | status_request_v2, trusted_ca_keys, max_fragment_length | no | yes |
+| Certificate revocation (CRLs) | no built-in check | CRL package `revocation`, opt-in; works with crypto/tls too |
 | FIPS 140-3 mode, GODEBUG settings | yes | no |
 
 ## When not to use it
@@ -138,6 +139,77 @@ tlsx's `Config` and `Conn` are distinct types from crypto/tls's. Code that
 takes a `*tls.Config`, such as `net/http`, needs an adapter, for example a
 `net.Listener` that returns tlsx connections.
 
+## Certificate revocation
+
+Neither crypto/tls nor tlsx checks whether a certificate was revoked;
+both leave it to the `VerifyConnection` hook. The package
+[`revocation`](revocation/doc.go) is such a hook, for servers that
+authenticate client certificates (devices, gateways, operators) and for
+clients. It checks the peer's verified chains against certificate
+revocation lists (CRLs, RFC 5280), and works with crypto/tls as well as
+tlsx:
+
+```go
+import "github.com/cB-Abhinav-Gautam/tlsx/revocation"
+
+chk, err := revocation.New(revocation.Config{
+	Sources: []revocation.Source{
+		{Issuer: deviceCA, URL: "http://pki.example/device-ca.crl"},
+		{Issuer: rootCA, File: "/etc/pki/root.crl"},
+	},
+})
+if err != nil { ... }
+defer chk.Close()
+
+// crypto/tls
+cfg := &tls.Config{
+	ClientAuth:       tls.RequireAndVerifyClientCert,
+	ClientCAs:        pool,
+	VerifyConnection: chk.VerifyConnection,
+}
+
+// tlsx
+xcfg := &tlsx.Config{
+	ClientAuth: tlsx.RequireAndVerifyClientCert,
+	ClientCAs:  pool,
+	VerifyConnection: func(cs tlsx.ConnectionState) error {
+		return chk.CheckChains(cs.VerifiedChains)
+	},
+}
+```
+
+`VerifyPeerCertificate` fits the hook of the same name in crypto/tls, tlsx
+and pion/dtls, and `CheckChain` checks a single chain.
+
+- **What is checked.** The leaf and every intermediate, each against the
+  CRL of its issuer. A CRL is used only if its issuer name matches the CA,
+  its signature verifies with the CA's key, and it is within its
+  thisUpdate and nextUpdate times. Every verified chain must pass.
+- **Failure policy.** Fail-closed is the default for every CA that has a
+  CRL configured: if the CRL is missing, unreadable, badly signed or past
+  its nextUpdate, the certificate is refused with a clear error.
+  Fail-open must be chosen per CA; it still refuses certificates listed
+  in the last good CRL. A CA without a configured CRL is not checked, and
+  `Status` lists it as "not configured".
+- **Refresh.** CRLs come from files or HTTP(S) URLs. They are refetched
+  periodically and ahead of nextUpdate, with back-off on failure. HTTP
+  fetches have a timeout and a size limit. The last good CRL is kept, and
+  a CRL with a lower CRL number is refused as a rollback.
+- **Status.** `Status` reports, per CRL, the last fetch, thisUpdate,
+  nextUpdate, CRL number, number of entries, last error and whether it is
+  stale. `Config.OnEvent` feeds metrics or logs.
+- **Limits.**
+  - No OCSP yet; `Config.Extra` is the extension point for it.
+  - No delta CRLs: a delta CRL is refused rather than taken for a full one.
+  - No indirect CRLs and no CRLs partitioned by reason. CRLs partitioned
+    by distribution point URI are supported.
+  - Unknown critical CRL extensions make a CRL unusable.
+  - The rollback check is in memory and does not survive a restart.
+
+The package documentation ([revocation/doc.go](revocation/doc.go)) has the
+details; [revocation/example_test.go](revocation/example_test.go) has the
+examples.
+
 ## How it tracks upstream
 
 tlsx carries Go's files with small, marked changes, on top of Go's own
@@ -195,6 +267,7 @@ the last local run.
 | Raw public keys, TLS 1.2 and 1.3, pinning refusals | OpenSSL 3.6.4 and GnuTLS 3.8.13 | both roles, both implementations |
 | AES-CCM (internal/ccm) | RFC 3610 vectors; one value from Python cryptography | n/a |
 | brainpool ECDH | RFC 7027 Appendix A vectors | n/a |
+| CRL parsing and checking (`revocation`), incl. CRL number and reason | OpenSSL 3.6.4 (`openssl ca -gencrl`) | n/a |
 
 **Tested only by tlsx's own tests (Go client against Go server):**
 
@@ -205,6 +278,9 @@ the last local run.
 - **ffdhe3072/4096 and brainpoolP384r1/P512r1 in handshakes.** Only ffdhe2048 and brainpoolP256r1 go through a handshake with OpenSSL. The curve arithmetic of all three brainpool curves is cross-checked with OpenSSL.
 - **`ClientHelloInfo.Ext`** and the event observer.
 - **External PSK with Encrypted Client Hello.** The identity is not sent.
+- **The `revocation` package's refresh, HTTP source, failure policy and
+  handshakes** (crypto/tls and tlsx servers, TLS 1.2 and 1.3), with CRLs
+  made by crypto/x509. Only CRL parsing is checked against OpenSSL.
 
 **Upstream behaviour.** Go's own crypto/tls tests run here with small
 adjustments, listed in UPSTREAM.md:

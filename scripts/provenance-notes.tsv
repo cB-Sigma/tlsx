@@ -79,3 +79,4 @@ revocation/revocation_test.go	(c)	tlsx
 revocation/http_test.go	(c)	tlsx
 revocation/handshake_test.go	(c)	tlsx
 revocation/openssl_test.go	(c)	tlsx; runs OpenSSL as an external program
+revocation/example_test.go	(c)	tlsx

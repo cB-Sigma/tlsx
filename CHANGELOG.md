@@ -3,6 +3,31 @@
 All notable changes to tlsx. Versions follow semantic versioning; before
 v1.0.0, minor versions may change the API.
 
+## v0.2.0 (2026-09-28)
+
+- New package `revocation`: certificate revocation checking with CRLs
+  (RFC 5280), for crypto/tls, tlsx and other stacks.
+  - `Checker.VerifyConnection` fits crypto/tls's `Config.VerifyConnection`.
+    `CheckChains` does the same for tlsx's, `VerifyPeerCertificate` fits
+    crypto/tls, tlsx and pion/dtls, and `CheckChain` checks one chain.
+  - One or more CRLs per CA, from files or HTTP(S) URLs. A CRL is used
+    only if its issuer name matches, its signature verifies with the CA's
+    key and it is within thisUpdate and nextUpdate. The leaf and every
+    intermediate are checked.
+  - Fail-closed by default; fail-open only when set per CA. CAs without a
+    CRL are not checked and are listed as not configured.
+  - Background refresh, periodic and ahead of nextUpdate, with back-off.
+    The last good CRL is kept, and a lower CRL number is refused as a
+    rollback. HTTP fetches have a timeout and a size limit.
+  - `Status` per CRL, and an event hook for metrics and logging.
+  - CRLs partitioned by issuing distribution point URI are supported.
+    Not supported: OCSP (`Config.Extra` is the extension point), delta
+    CRLs, indirect CRLs, CRLs partitioned by reason.
+  - Tested with CRLs from crypto/x509 and one from `openssl ca -gencrl`,
+    and in TLS 1.2 and 1.3 handshakes with crypto/tls and tlsx servers.
+- CI: actions/checkout v7, actions/setup-go v7 and actions/cache v6
+  (Node.js 24).
+
 ## v0.1.0 (2026-09-28)
 
 First standalone release. tlsx was developed inside SigmaM2M and is now a
