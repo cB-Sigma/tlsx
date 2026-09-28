@@ -269,7 +269,7 @@ func (hs *serverHandshakeState) processClientHello() error {
 	hs.hello.alpnProtocol = selectedProto
 	c.clientProtocol = selectedProto
 
-	hs.cert, err = c.config.getCertificate(clientHelloInfo(hs.ctx, c, hs.clientHello))
+	hs.cert, err = c.getCertificateX(clientHelloInfo(hs.ctx, c, hs.clientHello)) // tlsx: PSK-only servers
 	if err != nil {
 		if err == errNoCertificates {
 			c.sendAlert(alertUnrecognizedName)
@@ -589,6 +589,9 @@ func (hs *serverHandshakeState) doResumeHandshake() error {
 
 func (hs *serverHandshakeState) doFullHandshake() error {
 	c := hs.c
+	if hs.suite.flags&suitePSK != 0 { // tlsx: x_psk.go
+		return hs.doFullHandshakePSK()
+	}
 
 	if hs.clientHello.ocspStapling && len(hs.cert.OCSPStaple) > 0 {
 		hs.hello.ocspStapling = true

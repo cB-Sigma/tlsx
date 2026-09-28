@@ -343,6 +343,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 			// Update binders and obfuscated_ticket_age.
 			ticketAge := c.config.time().Sub(time.Unix(int64(hs.session.createdAt), 0))
 			hello.pskIdentities[0].obfuscatedTicketAge = uint32(ticketAge/time.Millisecond) + hs.session.ageAdd
+			c.x.externalPSKAge(hello) // tlsx: 0 for an external PSK
 
 			transcript := hs.suite.hash.New()
 			transcript.Write([]byte{typeMessageHash, 0, 0, uint8(len(chHash))})
@@ -427,11 +428,11 @@ func (hs *clientHandshakeStateTLS13) processServerHello() error {
 		return errors.New("tls: malformed key_share extension")
 	}
 
-	if hs.serverHello.serverShare.group == 0 {
+	if hs.serverHello.serverShare.group == 0 && !c.pskOnlyAllowed(hs.serverHello) { // tlsx: psk_ke
 		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: server did not send a key share")
 	}
-	if !slices.ContainsFunc(hs.hello.keyShares, func(ks keyShare) bool {
+	if hs.serverHello.serverShare.group != 0 && !slices.ContainsFunc(hs.hello.keyShares, func(ks keyShare) bool {
 		return ks.group == hs.serverHello.serverShare.group
 	}) {
 		c.sendAlert(alertIllegalParameter)
@@ -465,6 +466,7 @@ func (hs *clientHandshakeStateTLS13) processServerHello() error {
 	c.verifiedChains = hs.session.verifiedChains
 	c.ocspResponse = hs.session.ocspResponse
 	c.scts = hs.session.scts
+	c.externalPSKAccepted() // tlsx: not a resumption
 	return nil
 }
 

@@ -289,6 +289,9 @@ func (hs *serverHandshakeStateTLS13) processClientHello() error {
 
 func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 	c := hs.c
+	if done, err := hs.checkExternalPSK(); done || err != nil { // tlsx: external PSKs (x_psk.go)
+		return err
+	}
 
 	if c.config.SessionTicketsDisabled {
 		return nil

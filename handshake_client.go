@@ -236,7 +236,14 @@ func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if session != nil {
+	external := false
+	if session == nil { // tlsx: TLS 1.3 external PSK (x_psk.go)
+		if session, earlySecret, binderKey, err = c.loadExternalPSK(hello); err != nil {
+			return err
+		}
+		external = session != nil
+	}
+	if session != nil && !external { // tlsx
 		defer func() {
 			// If we got a handshake failure when resuming a session, throw away
 			// the session ticket. See RFC 5077, Section 3.2.
@@ -338,6 +345,9 @@ func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 		return hs.handshake()
 	}
 
+	if external { // tlsx: a TLS 1.3 external PSK is no TLS 1.2 session
+		session = nil
+	}
 	hs := &clientHandshakeState{
 		c:           c,
 		ctx:         ctx,
@@ -638,6 +648,9 @@ func (hs *clientHandshakeState) pickCipherSuite() error {
 
 func (hs *clientHandshakeState) doFullHandshake() error {
 	c := hs.c
+	if hs.suite.flags&suitePSK != 0 { // tlsx: x_psk.go
+		return hs.doFullHandshakePSK()
+	}
 
 	msg, err := c.readHandshake(&hs.finishedHash)
 	if err != nil {
@@ -1045,7 +1058,7 @@ func (hs *clientHandshakeState) readSessionTicket() error {
 }
 
 func (hs *clientHandshakeState) saveSessionTicket() error {
-	if hs.ticket == nil {
+	if hs.c.x.noSessionCache() { // tlsx: PSK and raw key sessions carry no identity
 		return nil
 	}
 	c := hs.c
