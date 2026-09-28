@@ -93,6 +93,9 @@ func (ka rsaKeyAgreement) generateClientKeyExchange(config *Config, clientHello 
 	if !ok {
 		return nil, nil, errors.New("tls: server certificate contains incorrect key type for selected ciphersuite")
 	}
+	if err := checkPeerPSSKeyX(cert, 0); err != nil { // tlsx: PSS keys only sign
+		return nil, nil, err
+	}
 	encrypted, err := rsa.EncryptPKCS1v15(config.rand(), rsaKey, preMasterSecret)
 	if err != nil {
 		return nil, nil, err
@@ -331,6 +334,9 @@ func (ka *ecdheKeyAgreement) processServerKeyExchange(config *Config, clientHell
 		if !isSupportedSignatureAlgorithm(ka.signatureAlgorithm, clientHello.supportedSignatureAlgorithms) {
 			return errors.New("tls: certificate used with invalid signature algorithm")
 		}
+		if err := checkPeerPSSKeyX(cert, ka.signatureAlgorithm); err != nil { // tlsx
+			return err
+		}
 		sigType, sigHash, err = typeAndHashFromSignatureScheme(ka.signatureAlgorithm)
 		if err != nil {
 			return err
@@ -347,6 +353,9 @@ func (ka *ecdheKeyAgreement) processServerKeyExchange(config *Config, clientHell
 			return errors.New("tls: invalid signature by the server certificate: " + err.Error())
 		}
 	} else {
+		if err := checkPeerPSSKeyX(cert, 0); err != nil { // tlsx
+			return err
+		}
 		sigType, sigHash, err = legacyTypeAndHashFromPublicKey(cert.PublicKey)
 		if err != nil {
 			return err

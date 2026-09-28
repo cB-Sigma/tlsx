@@ -871,6 +871,10 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 				return err
 			}
 		} else {
+			if ownPSSKeyX(chainToSend) { // tlsx: no PKCS #1 v1.5 signature by a PSS key
+				c.sendAlert(alertHandshakeFailure)
+				return errors.New("tlsx: an RSASSA-PSS certificate key cannot sign in TLS 1.0 and 1.1")
+			}
 			sigType, sigHash, err := legacyTypeAndHashFromPublicKey(key.Public())
 			if err != nil {
 				c.sendAlert(alertIllegalParameter)

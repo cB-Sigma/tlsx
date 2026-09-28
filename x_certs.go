@@ -122,12 +122,48 @@ func IsRSAPSSKey(cert *x509.Certificate) bool {
 	if !ok {
 		return false
 	}
-	if _, ok := pssKeyInfo.Load(pssKeyID(pub)); ok {
-		return true
+	// The certificate's own SubjectPublicKeyInfo decides. The registry
+	// (by key value) is only for certificates without one: an
+	// rsaEncryption certificate for the same key is not a PSS key.
+	if len(cert.RawSubjectPublicKeyInfo) > 0 {
+		_, _, pss := parsePSSSPKI(cert.RawSubjectPublicKeyInfo)
+		return pss
 	}
-	// Parsed elsewhere: look at the SubjectPublicKeyInfo.
-	_, _, pss := parsePSSSPKI(cert.RawSubjectPublicKeyInfo)
-	return pss
+	_, ok = pssKeyInfo.Load(pssKeyID(pub))
+	return ok
+}
+
+// checkPeerPSSKeyX refuses a use of the peer's RSASSA-PSS key other than
+// an rsa_pss_pss signature scheme the key allows. RFC 4055 (section 1.2)
+// restricts an id-RSASSA-PSS key to RSASSA-PSS signatures, and RFC 8446
+// (section 4.2.3, which applies to TLS 1.2 too) to the rsa_pss_pss
+// schemes. scheme 0 stands for the uses without a scheme: RSA key
+// transport and the fixed signatures of TLS 1.0 and 1.1. crypto/x509
+// cannot parse these keys, so crypto/tls never meets one.
+func checkPeerPSSKeyX(cert *x509.Certificate, scheme SignatureScheme) error {
+	if cert == nil || !IsRSAPSSKey(cert) {
+		return nil
+	}
+	if scheme == 0 {
+		return errors.New("tlsx: an RSASSA-PSS certificate key cannot be used for RSA key exchange or TLS 1.0 and 1.1 signatures")
+	}
+	_, h, _ := parsePSSSPKI(cert.RawSubjectPublicKeyInfo)
+	if !slices.Contains(pssSchemesFor(cert.PublicKey.(*rsa.PublicKey), h), scheme) {
+		return errors.New("tlsx: an RSASSA-PSS certificate key cannot sign with " + scheme.String())
+	}
+	return nil
+}
+
+// ownPSSKeyX reports whether the leaf of c has an RSASSA-PSS key.
+func ownPSSKeyX(c *Certificate) bool {
+	if c == nil || len(c.Certificate) == 0 {
+		return false
+	}
+	leaf := c.Leaf
+	if leaf == nil || leaf.PublicKey == nil {
+		leaf, _ = parseCertificateX(c.Certificate[0])
+	}
+	return leaf != nil && IsRSAPSSKey(leaf)
 }
 
 // AppendCertsFromPEM adds the PEM certificates to pool like
@@ -160,6 +196,11 @@ func pssSchemes(pub *rsa.PublicKey) []SignatureScheme {
 	if v, ok := pssKeyInfo.Load(pssKeyID(pub)); ok {
 		h = v.(crypto.Hash)
 	}
+	return pssSchemesFor(pub, h)
+}
+
+// pssSchemesFor is pssSchemes for a key bound to hash h (0: any).
+func pssSchemesFor(pub *rsa.PublicKey, h crypto.Hash) []SignatureScheme {
 	var out []SignatureScheme
 	for _, s := range []struct {
 		scheme SignatureScheme

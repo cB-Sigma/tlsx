@@ -333,6 +333,10 @@ func (hs *serverHandshakeState) processClientHello() error {
 			return fmt.Errorf("tls: unsupported decryption key type (%T)", priv.Public())
 		}
 	}
+	if ownPSSKeyX(hs.cert) { // tlsx: an RSASSA-PSS key only signs, with rsa_pss_pss (TLS 1.2)
+		hs.rsaDecryptOk = false
+		hs.rsaSignOk = hs.rsaSignOk && c.vers >= VersionTLS12
+	}
 
 	return nil
 }
@@ -816,6 +820,10 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 				c.sendAlert(alertIllegalParameter)
 				return errors.New("tls: client certificate used with invalid signature algorithm")
 			}
+			if err := checkPeerPSSKeyX(c.peerCertificates[0], certVerify.signatureAlgorithm); err != nil { // tlsx
+				c.sendAlert(alertIllegalParameter)
+				return err
+			}
 			sigType, sigHash, err = typeAndHashFromSignatureScheme(certVerify.signatureAlgorithm)
 			if err != nil {
 				return c.sendAlert(alertInternalError)
@@ -833,6 +841,10 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 				return errors.New("tls: invalid signature by the client certificate: " + err.Error())
 			}
 		} else {
+			if err := checkPeerPSSKeyX(c.peerCertificates[0], 0); err != nil { // tlsx
+				c.sendAlert(alertIllegalParameter)
+				return err
+			}
 			sigType, sigHash, err = legacyTypeAndHashFromPublicKey(pub)
 			if err != nil {
 				c.sendAlert(alertIllegalParameter)

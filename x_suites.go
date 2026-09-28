@@ -377,6 +377,9 @@ func (ka *dheKeyAgreement) processServerKeyExchange(config *Config, clientHello 
 	if !isSupportedSignatureAlgorithm(ka.signatureAlgorithm, clientHello.supportedSignatureAlgorithms) {
 		return errors.New("tls: certificate used with invalid signature algorithm")
 	}
+	if err := checkPeerPSSKeyX(cert, ka.signatureAlgorithm); err != nil {
+		return err
+	}
 	sigType, sigHash, err := typeAndHashFromSignatureScheme(ka.signatureAlgorithm)
 	if err != nil {
 		return err
