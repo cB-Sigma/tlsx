@@ -77,3 +77,5 @@ revocation/idp.go	(c)	tlsx; RFC 5280 5.2.5 issuing distribution point structure 
 revocation/pki_test.go	(c)	tlsx; ecdsa-with-SHA256 algorithm identifier (published value)
 revocation/revocation_test.go	(c)	tlsx
 revocation/http_test.go	(c)	tlsx
+revocation/handshake_test.go	(c)	tlsx
+revocation/openssl_test.go	(c)	tlsx; runs OpenSSL as an external program

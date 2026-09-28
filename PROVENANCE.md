@@ -81,8 +81,10 @@ Classes: (a) Go's file, unchanged or only mechanically rewritten;
 | `quic.go` | (a) | Go go1.27.1 `src/crypto/tls/quic.go` | identical after the mechanical rewrite |
 | `quic_test.go` | (a) | Go go1.27.1 `src/crypto/tls/quic_test.go` | identical after the mechanical rewrite |
 | `revocation/doc.go` | (c) | tlsx | package documentation |
+| `revocation/handshake_test.go` | (c) | tlsx |  |
 | `revocation/http_test.go` | (c) | tlsx |  |
 | `revocation/idp.go` | (c) | tlsx | RFC 5280 5.2.5 issuing distribution point structure (cited in the file) |
+| `revocation/openssl_test.go` | (c) | tlsx | runs OpenSSL as an external program |
 | `revocation/pki_test.go` | (c) | tlsx | ecdsa-with-SHA256 algorithm identifier (published value) |
 | `revocation/revocation.go` | (c) | tlsx | RFC 5280 CRL reason code names (published values) |
 | `revocation/revocation_test.go` | (c) | tlsx |  |
