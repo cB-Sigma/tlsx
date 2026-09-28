@@ -46,3 +46,6 @@ func (internalRandShim) SetTestingReader(r io.Reader) {
 }
 
 var savedRandReader = cryptorand.Reader
+
+// LEPutUint64 is used by the BoGo shim for the shim ID.
+func (byteorderShim) LEPutUint64(b []byte, v uint64) { binary.LittleEndian.PutUint64(b, v) }
