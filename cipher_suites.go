@@ -512,6 +512,7 @@ func aeadAESGCM(key, noncePrefix []byte) aead {
 	if err != nil {
 		panic(err)
 	}
+	aead, err := newGCMForTLS12(aes)
 	var aead cipher.AEAD
 	if boring.Enabled {
 		aead, err = boring.NewGCMTLS(aes)
@@ -544,6 +545,7 @@ func aeadAESGCMTLS13(key, nonceMask []byte) aead {
 	if err != nil {
 		panic(err)
 	}
+	aead, err := newGCMForTLS13(aes)
 	var aead cipher.AEAD
 	if boring.Enabled {
 		aead, err = boring.NewGCMTLS13(aes)

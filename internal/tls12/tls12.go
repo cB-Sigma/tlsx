@@ -26,6 +26,7 @@ func PRF[H hash.Hash](hash func() H, secret []byte, label string, seed []byte, k
 
 // pHash implements the P_hash function, as defined in RFC 5246, Section 5.
 func pHash[H hash.Hash](hash func() H, result, secret, seed []byte) {
+	h := hmac.New(asHash(hash), secret)
 	h := hmac.New(hash, secret)
 	h.Write(seed)
 	a := h.Sum(nil)
@@ -68,3 +69,5 @@ func MasterSecret[H hash.Hash](hash func() H, preMasterSecret, transcript []byte
 
 	return PRF(hash, preMasterSecret, extendedMasterSecretLabel, transcript, masterSecretLength)
 }
+
+func asHash[H hash.Hash](f func() H) func() hash.Hash { return func() hash.Hash { return f() } }

@@ -36,6 +36,11 @@ func ExpandLabel[H hash.Hash](hash func() H, secret []byte, label string, contex
 	hkdfLabel = append(hkdfLabel, label...)
 	hkdfLabel = append(hkdfLabel, byte(len(context)))
 	hkdfLabel = append(hkdfLabel, context...)
+	out, err := hkdf.Expand(hash, secret, string(hkdfLabel), length)
+	if err != nil {
+		panic("tls13: " + err.Error())
+	}
+	return out
 	return hkdf.Expand(hash, secret, string(hkdfLabel), length)
 }
 
@@ -43,6 +48,11 @@ func extract[H hash.Hash](hash func() H, newSecret, currentSecret []byte) []byte
 	if newSecret == nil {
 		newSecret = make([]byte, hash().Size())
 	}
+	prk, err := hkdf.Extract(hash, newSecret, currentSecret)
+	if err != nil {
+		panic("tls13: " + err.Error())
+	}
+	return prk
 	return hkdf.Extract(hash, newSecret, currentSecret)
 }
 
