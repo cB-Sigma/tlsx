@@ -22,12 +22,12 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The sync merges Go's history: it needs all of ours, with tags.
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: stable
       - name: tools
@@ -36,7 +36,7 @@ jobs:
           git config --global user.name "tlsx upstream check"
           git config --global user.email "tlsx-upstream@users.noreply.github.com"
       - name: Go's repository
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: go-upstream
           key: go-upstream-${{ github.run_id }}
