@@ -545,6 +545,16 @@ func (hs *clientHandshakeStateTLS13) readServerParameters() error {
 		return err
 	}
 	c.clientProtocol = encryptedExtensions.alpnProtocol
+	if m := encryptedExtensions.maxFragmentLength; m != 0 { // tlsx: max_fragment_length
+		if m != hs.hello.x.maxFragmentLength {
+			c.sendAlert(alertIllegalParameter)
+			return errors.New("tlsx: server answered a different max_fragment_length")
+		}
+		c.x.maxFragment = 1 << (8 + int(m))
+	}
+	if err := c.acceptCertTypes(hs.hello, encryptedExtensions.certTypes); err != nil { // tlsx: RFC 7250
+		return err
+	}
 
 	if c.quic != nil {
 		if encryptedExtensions.quicTransportParameters == nil {
@@ -748,7 +758,8 @@ func (hs *clientHandshakeStateTLS13) sendClientCertificate() error {
 		return nil
 	}
 
-	cert, err := c.getClientCertificate(&CertificateRequestInfo{
+	c.x.peerCAs = hs.certReq.certificateAuthorities               // tlsx
+	cert, err := c.getClientCertificateX(&CertificateRequestInfo{ // tlsx: RFC 7250
 		AcceptableCAs:    hs.certReq.certificateAuthorities,
 		SignatureSchemes: hs.certReq.supportedSignatureAlgorithms,
 		Version:          c.vers,

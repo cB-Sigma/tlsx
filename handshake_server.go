@@ -619,6 +619,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 
 	certMsg := new(certificateMsg)
 	certMsg.certificates = hs.cert.Certificate
+	certMsg.rawKey = c.x.ownRawKey // tlsx: RFC 7250
 	// Set localCertificate here, rather than at certificate selection time, so
 	// that it is only populated when a certificate is actually presented to the
 	// peer, and not on resumed connections.
@@ -943,6 +944,9 @@ func (hs *serverHandshakeState) sendFinished(out []byte) error {
 // processCertsFromClient takes a chain of client certificates either from a
 // certificateMsg message or a certificateMsgTLS13 message and verifies them.
 func (c *Conn) processCertsFromClient(certificate Certificate) error {
+	if handled, err := c.processClientRawKey(certificate.Certificate); handled { // tlsx: RFC 7250
+		return err
+	}
 	certificates := certificate.Certificate
 	certs := make([]*x509.Certificate, len(certificates))
 	var err error

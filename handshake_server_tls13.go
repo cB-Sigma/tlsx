@@ -812,6 +812,13 @@ func (hs *serverHandshakeStateTLS13) sendServerParameters() error {
 		}
 	}
 
+	if m := hs.clientHello.x.maxFragmentLength; m != 0 { // tlsx: max_fragment_length
+		encryptedExtensions.maxFragmentLength = m
+		c.x.maxFragment = 1 << (8 + int(m))
+	}
+	if err := hs.serverRawKeyTLS13(encryptedExtensions); err != nil { // tlsx: RFC 7250
+		return err
+	}
 	if _, err := hs.c.writeHandshakeRecord(encryptedExtensions, hs.transcript); err != nil {
 		return err
 	}

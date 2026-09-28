@@ -1008,6 +1008,8 @@ type encryptedExtensionsMsg struct {
 	earlyData               bool
 	echRetryConfigs         []byte
 	serverNameAck           bool
+	maxFragmentLength       uint8          // tlsx: RFC 6066 4
+	certTypes               certTypeAnswer // tlsx: RFC 7250
 }
 
 func (m *encryptedExtensionsMsg) marshal() ([]byte, error) {
@@ -1047,6 +1049,11 @@ func (m *encryptedExtensionsMsg) marshal() ([]byte, error) {
 				b.AddUint16(extensionServerName)
 				b.AddUint16(0) // empty extension_data
 			}
+			if m.maxFragmentLength != 0 { // tlsx
+				b.AddUint16(extensionMaxFragmentLength)
+				b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) { b.AddUint8(m.maxFragmentLength) })
+			}
+			m.certTypes.marshal(b) // tlsx: RFC 7250
 		})
 	})
 
@@ -1107,6 +1114,14 @@ func (m *encryptedExtensionsMsg) unmarshal(data []byte) bool {
 				return false
 			}
 			m.serverNameAck = true
+		case extensionMaxFragmentLength: // tlsx
+			if !extData.ReadUint8(&m.maxFragmentLength) || m.maxFragmentLength < 1 || m.maxFragmentLength > 4 {
+				return false
+			}
+		case extensionClientCertificateType, extensionServerCertificateType: // tlsx: RFC 7250
+			if _, ok := m.certTypes.unmarshal(extension, &extData); !ok {
+				return false
+			}
 		default:
 			// Ignore unknown extensions.
 			continue
@@ -1390,9 +1405,13 @@ func (m *certificateRequestMsgTLS13) unmarshal(data []byte) bool {
 
 type certificateMsg struct {
 	certificates [][]byte
+	rawKey       bool // tlsx: RFC 7250 raw public key (TLS 1.2)
 }
 
 func (m *certificateMsg) marshal() ([]byte, error) {
+	if m.rawKey { // tlsx: RFC 7250
+		return m.marshalRawKey()
+	}
 	var i int
 	for _, slice := range m.certificates {
 		i += len(slice)
@@ -1423,6 +1442,9 @@ func (m *certificateMsg) marshal() ([]byte, error) {
 }
 
 func (m *certificateMsg) unmarshal(data []byte) bool {
+	if m.rawKey { // tlsx: RFC 7250
+		return m.unmarshalRawKey(data)
+	}
 	if len(data) < 7 {
 		return false
 	}

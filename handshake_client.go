@@ -735,7 +735,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		certRequested = true
 
 		cri := certificateRequestInfoFromMsg(hs.ctx, c.vers, certReq)
-		if chainToSend, err = c.getClientCertificate(cri); err != nil {
+		if chainToSend, err = c.getClientCertificateX(cri); err != nil { // tlsx: RFC 7250
 			c.sendAlert(alertInternalError)
 			return err
 		}
@@ -762,6 +762,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 	if certRequested {
 		certMsg = new(certificateMsg)
 		certMsg.certificates = chainToSend.Certificate
+		certMsg.rawKey = c.x.ownRawKey && len(certMsg.certificates) > 0 // tlsx: RFC 7250
 		if _, err := hs.c.writeHandshakeRecord(certMsg, &hs.finishedHash); err != nil {
 			return err
 		}
@@ -1114,6 +1115,9 @@ func checkKeySize(n int) (max int, ok bool) {
 // verifyServerCertificate parses and verifies the provided chain, setting
 // c.verifiedChains and c.peerCertificates or sending the appropriate alert.
 func (c *Conn) verifyServerCertificate(certificates [][]byte) error {
+	if handled, err := c.verifyServerRawKey(certificates); handled { // tlsx: RFC 7250
+		return err
+	}
 	certs := make([]*x509.Certificate, len(certificates))
 	for i, asn1Data := range certificates {
 		cert, err := globalCertCache.newCert(asn1Data)

@@ -1138,7 +1138,7 @@ func (c *Conn) unmarshalHandshakeMessage(data []byte, transcript transcriptHash)
 		if c.vers == VersionTLS13 {
 			m = new(certificateMsgTLS13)
 		} else {
-			m = new(certificateMsg)
+			m = &certificateMsg{rawKey: c.x.peerRawKey} // tlsx: RFC 7250
 		}
 	case typeCertificateRequest:
 		if c.vers == VersionTLS13 {
