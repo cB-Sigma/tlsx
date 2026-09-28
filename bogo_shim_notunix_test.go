@@ -4,7 +4,7 @@
 
 //go:build !unix || wasm
 
-package tls
+package tlsx
 
 func pauseProcess() {
 	panic("-wait-for-debugger not supported on this OS")

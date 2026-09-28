@@ -4,7 +4,7 @@
 
 //go:build unix && !wasm
 
-package tls
+package tlsx
 
 import (
 	"os"

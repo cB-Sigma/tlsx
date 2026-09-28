@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tls
+package tlsx
 
 import (
 	"bytes"
-	"crypto/internal/cryptotest"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -14,9 +13,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/cryptotest"
+	"github.com/cB-Abhinav-Gautam/tlsx/internal/testenv"
 	"html/template"
-	"internal/byteorder"
-	"internal/testenv"
 	"io"
 	"log"
 	"net"
