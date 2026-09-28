@@ -46,6 +46,9 @@ done
 #   LICENSE, PATENTS                                          -> .
 # The file rule (the callback) then keeps, of crypto/tls, the top-level .go
 # files and testdata/, less the files tlsx does not carry (upstream-lib.sh).
+# The BoGo shim stays out of the filter although tlsx now carries it: it
+# came in as a copy (upstream-lib.sh, UPSTREAM_COPIED), because filtering
+# it in would change every commit ID since 2023.
 cd "$work"
 git filter-repo --force \
 	--preserve-commit-hashes \

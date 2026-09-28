@@ -30,7 +30,10 @@
 #      release's. Files tlsx does not carry stay deleted. What is left keeps
 #      conflict markers: resolve, git add, and run again with --continue.
 #   4. Commit the mechanical rewrite (upstream-lib.sh) of the files upstream
-#      changed on its own, titled "mechanical: ...". Then commit the record:
+#      changed on its own, titled "mechanical: ...". Merge Go's changes to
+#      the files tlsx carries as copies (the BoGo shim, UPSTREAM_COPIED) and
+#      commit them apart; a conflict there is left for a hand update and
+#      reported. Then commit the record:
 #      "Base:" in UPSTREAM.md, docs/upstream-commit-map.txt, PROVENANCE.md,
 #      and the rewrite commit's ID appended to .git-blame-ignore-revs (so
 #      git blame passes over it to Go's commits).
@@ -89,7 +92,9 @@ finish() {
 		mech="$(git rev-parse HEAD)"
 		echo "Rewrite committed: $(git log -1 --format='%h %s')" | summary
 	fi
-	# 4b. The record of the sync.
+	# 4b. The files carried as copies, outside the filtered history.
+	sync_copied "$new"
+	# 4c. The record of the sync.
 	sed "s/^Base: *go[0-9.]*/Base: $new/" UPSTREAM.md > UPSTREAM.md.sync && mv UPSTREAM.md.sync UPSTREAM.md
 	mkdir -p "$(dirname "$map")"
 	commit_map "$work" "upstream/$new" > "$map.sync" && mv "$map.sync" "$map"
@@ -103,6 +108,43 @@ finish() {
 	: > "$state" # no sync in progress
 	[ "$test" = 1 ] || return 0
 	checks "$new"
+}
+
+# sync_copied NEW: merge Go's changes between the base release and NEW
+# into the files tlsx carries as copies, on rewritten texts, and commit
+# them. A conflicted file is left as it is; the merge with conflict markers
+# is kept in a temporary directory and reported.
+sync_copied() {
+	local new="$1" f tmp merged=() conflicted=()
+	tmp="$(mktemp -d)"
+	mkdir -p "$tmp/b" "$tmp/n" "$tmp/o"
+	for f in "${UPSTREAM_COPIED[@]}"; do
+		git -C "$gorepo" cat-file blob "$base:src/crypto/tls/$f" > "$tmp/b/$f" 2> /dev/null || continue
+		if ! git -C "$gorepo" cat-file blob "$new:src/crypto/tls/$f" > "$tmp/n/$f" 2> /dev/null; then
+			conflicted+=("$f (removed in Go $new)")
+			continue
+		fi
+		cmp -s "$tmp/b/$f" "$tmp/n/$f" && continue
+		rewrite "$tmp/b" "$f"
+		rewrite "$tmp/n" "$f"
+		cp -- "$f" "$tmp/o/$f"
+		if git merge-file -L tlsx -L "$base" -L "$new" "$tmp/o/$f" "$tmp/b/$f" "$tmp/n/$f"; then
+			cmp -s "$tmp/o/$f" "$f" && continue # tlsx already has the change
+			cp -- "$tmp/o/$f" "$f"
+			git add -- "$f"
+			merged+=("$f")
+		else
+			conflicted+=("$f (merge with conflict markers: $tmp/o/$f)")
+		fi
+	done
+	if [ ${#merged[@]} -gt 0 ]; then
+		git commit -q -m "tlsx: merge Go $new's changes to the BoGo files copied from Go" \
+			-m "These files are Go's, Copyright The Go Authors (BSD-3-Clause), carried as copies outside the filtered history (UPSTREAM.md). scripts/sync-upstream.sh merged the changes between Go $base and $new: ${merged[*]}."
+		echo "Copied BoGo files updated: ${merged[*]}" | summary
+	fi
+	if [ ${#conflicted[@]} -gt 0 ]; then
+		{ echo "Copied files to update by hand:"; printf -- '- %s\n' "${conflicted[@]}"; } | summary
+	fi
 }
 
 checks() {

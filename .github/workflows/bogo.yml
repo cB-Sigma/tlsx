@@ -1,0 +1,50 @@
+# Copyright 2026 Abhinav Gautam. Use of this source code is governed
+# by the BSD-style licence in the LICENSE file.
+#
+# Weekly and on demand: BoringSSL's BoGo conformance suite against tlsx
+# (scripts/bogo.sh). BoringSSL is downloaded at the revision the shim pins
+# (boringsslModVer in bogo_shim_test.go), with the runner's own module
+# dependencies, and cached; nothing of it is committed. A full run takes
+# a few minutes, so it does not run on every push.
+name: bogo
+
+on:
+  schedule:
+    - cron: "41 5 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bogo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          # The module cache below also holds BoringSSL and its runner's
+          # dependencies, keyed on the pinned revision.
+          cache: false
+      - name: module and build cache (BoringSSL included)
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: bogo-${{ runner.os }}-${{ hashFiles('bogo_shim_test.go', 'go.sum') }}
+          restore-keys: bogo-${{ runner.os }}-
+      - name: BoGo
+        run: |
+          set +e
+          scripts/bogo.sh --summary bogo-summary.json | tee bogo.log
+          status=${PIPESTATUS[0]}
+          {
+            echo '## BoGo'
+            echo
+            echo '```'
+            grep -E -e '^BoGo' -e '--- FAIL' -e 'but passed' bogo.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

@@ -109,7 +109,6 @@ adapter lines into an ignored commit would hide them from blame.
 provenance script use them.
 
 - **Files.** Every `.go` file of `src/crypto/tls` except:
-  - the BoGo shim (`bogo_shim_*`);
   - the FIPS 140 tests (`fips140_test.go`);
   - `link_test.go`, `defaults_boring.go`, `generate_cert.go` and `example_test.go`;
   - `certificates_generator_test.go`.
@@ -144,8 +143,28 @@ provenance script use them.
   - tls_test.go: the FIPS 140 variant of a test is a skip (no FIPS mode);
     the Config.Clone test sets `Config.Ext`; the cipher-suite list tests
     leave out tlsx's extra suites (`isTLSXSuite`).
-  - handshake_test.go: the BoGo shim hooks are removed (the shim is not
-    carried).
+
+## The BoGo shim: copied, not filtered
+
+`bogo_shim_test.go`, `bogo_shim_unix_test.go`, `bogo_shim_notunix_test.go`
+and `bogo_config.json` (BoringSSL's conformance suite shim, README "BoGo")
+came in with v0.3.0 as copies of Go 1.27.1's files, in the commit `tlsx:
+copy Go 1.27.1's BoGo shim and configuration, unchanged`, followed by a
+`mechanical:` rename. They are not in the filtered history: adding them to
+`scripts/filter-upstream.sh` would change the ID of every commit since
+Go's first shim commit (2073b35e07, April 2023), and published history is
+not rewritten. So `git blame` shows that copy commit for their lines, and
+their Go authors are in Go's own history of `src/crypto/tls/bogo_*`.
+
+- `scripts/upstream-lib.sh` lists them (`UPSTREAM_COPIED`); the filter
+  still leaves them out, and `provenance.sh` compares them with Go's.
+- `scripts/sync-upstream.sh` merges Go's changes to them between the two
+  releases (three ways, on rewritten texts) and commits the result apart.
+  A conflict is reported and left for a hand update.
+- `handshake_test.go` has Go's `-bogo-mode` lines in TestMain again.
+- tlsx's shim flags are in `x_bogo_test.go`, reached through hooks marked
+  `// tlsx` in `bogo_shim_test.go`; `bogo_config.json` stays Go's, and
+  tlsx's expected failures are in `bogo_config_tlsx.json`.
 
 ## Pulling upstream changes
 

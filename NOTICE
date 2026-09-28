@@ -27,8 +27,9 @@ UPSTREAM.md. In summary:
 | internal/bigmod nat.go, nat_noasm.go, nat_test.go and testdata (from src/crypto/internal/fips140/bigmod) | Go | The Go Authors, BSD-3-Clause |
 | internal/ccm/slice.go (the function sliceForAppend from src/crypto/cipher/gcm.go) | Go | The Go Authors, BSD-3-Clause |
 | testdata/ (Go's recorded handshakes, certificates and keys for its tests) | Go | The Go Authors, BSD-3-Clause |
+| bogo_shim_test.go, bogo_shim_unix_test.go, bogo_shim_notunix_test.go, bogo_config.json: Go's BoGo shim and its configuration, copied from Go 1.27.1 (src/crypto/tls at Go commit 862c888e61; last changed by Go commits 6b0243ccf6, 01688daca6 and 95ae6418f3). They are copies, not part of the rewritten upstream history (UPSTREAM.md); their Go authors are in Go's history of those paths. bogo_shim_test.go has tlsx hooks marked "// tlsx" and the "Changes for tlsx" line | Go, with tlsx's changes | The Go Authors; changes Copyright 2026 Abhinav Gautam; BSD-3-Clause |
 | certificates_test.go (Go's generated test certificates) | Go | The Go Authors, BSD-3-Clause |
-| x_*.go, doc.go, gcm_tls.go, upstream_shims*.go, internal/tls13/x_external.go, internal/bigmod/export.go, internal/brainpool, internal/ccm (except slice.go), internal/boring, internal/cryptotest, internal/testenv, internal/testports, revocation/, scripts/, documentation | tlsx | Copyright 2026 Abhinav Gautam, BSD-3-Clause (the same licence as Go's code) |
+| x_*.go (including x_bogo_test.go, the shim flags for tlsx's features), bogo_config_tlsx.json, doc.go, gcm_tls.go, upstream_shims*.go, internal/tls13/x_external.go, internal/bigmod/export.go, internal/brainpool, internal/ccm (except slice.go), internal/boring, internal/cryptotest, internal/testenv, internal/testports, revocation/, scripts/, documentation | tlsx | Copyright 2026 Abhinav Gautam, BSD-3-Clause (the same licence as Go's code) |
 
 Go code adapted inside tlsx's own files
 ---------------------------------------
@@ -101,6 +102,13 @@ Other third-party material
 None known. No code from uTLS, BoringSSL, OpenSSL, GnuTLS, Wycheproof or
 other projects is included. OpenSSL and GnuTLS are used only as external
 programs by the interoperability tests.
+
+BoringSSL's BoGo test runner (ssl/test/runner; BoringSSL's licence is in
+its own LICENSE file) is not included either: scripts/bogo.sh and
+TestBogoSuite download BoringSSL at the revision bogo_shim_test.go pins
+(through the Go module proxy or git) and run the runner from there.
+x_bogo_test.go uses the runner's shim flag names, which are an interface,
+and no BoringSSL code.
 
 Dependencies
 ------------

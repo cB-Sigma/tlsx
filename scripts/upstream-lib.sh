@@ -9,8 +9,14 @@
 
 MODULE="github.com/cB-Abhinav-Gautam/tlsx"
 
+# Upstream crypto/tls files tlsx carries as copies, outside the history
+# filter-upstream.sh makes (adding them to the filter would change every
+# published commit ID): the BoGo shim and its configuration. They are
+# compared with Go's like the other files (provenance.sh), and
+# sync-upstream.sh merges Go's changes to them.
+UPSTREAM_COPIED=(bogo_shim_test.go bogo_shim_unix_test.go bogo_shim_notunix_test.go bogo_config.json)
+
 # Upstream crypto/tls files tlsx does not carry (and why):
-#   bogo_shim_*          BoringSSL's BoGo test runner shim (see README)
 #   fips140_test.go      FIPS 140-3 mode tests (tlsx has no FIPS mode)
 #   link_test.go         linker checks of the standard library build
 #   defaults_boring.go   BoringCrypto defaults
@@ -20,7 +26,7 @@ MODULE="github.com/cB-Abhinav-Gautam/tlsx"
 #                        FIPS module version check (internal API)
 upstream_excluded() {
 	case "$1" in
-	bogo_shim_*|fips140_test.go|link_test.go|defaults_boring.go|generate_cert.go|example_test.go|certificates_generator_test.go) return 0 ;;
+	fips140_test.go|link_test.go|defaults_boring.go|generate_cert.go|example_test.go|certificates_generator_test.go) return 0 ;;
 	esac
 	return 1
 }
@@ -81,8 +87,9 @@ rewrite() {
 	gofmt -w "${gofiles[@]}"
 }
 
-# upstream_files ROOT: list, relative to ROOT, the files of a tree in tlsx's
-# layout that come from Go (what filter-upstream.sh keeps).
+# upstream_files ROOT: list, relative to ROOT, the Go files of a tree in
+# tlsx's layout that come from Go (what filter-upstream.sh keeps, and the
+# copied BoGo shim files).
 upstream_files() {
 	(cd "$1" && {
 		ls *.go | while IFS= read -r f; do upstream_excluded "$f" || echo "$f"; done
@@ -99,6 +106,7 @@ extract() {
 		upstream_excluded "$(basename "$f")" && continue
 		cp "$f" "$dst/"
 	done
+	cp "$src/crypto/tls/bogo_config.json" "$dst/"
 	cp "$src"/crypto/tls/testdata/* "$dst/testdata/"
 	cp "$src/crypto/internal/fips140/tls13/tls13.go" "$dst/internal/tls13/"
 	cp "$src/crypto/internal/fips140/tls12/tls12.go" "$dst/internal/tls12/"
