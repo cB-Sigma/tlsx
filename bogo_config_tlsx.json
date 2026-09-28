@@ -13,7 +13,6 @@
 		"Renegotiate-Client-TLS12": "as Renegotiate-Client: the random session ID of crypto/tls's ClientHello, no session offered",
 		"Renegotiate-Client-NoExt-Allowed": "tlsx renegotiates only with peers that support secure renegotiation (RFC 5746); BoringSSL also allows insecure renegotiation when renegotiation is enabled",
 		"Renegotiate-Client-Once-2": "tlsx, like crypto/tls, refuses a second renegotiation with a warning-level no_renegotiation alert (RFC 5246 7.2.2); the runner ignores warnings and expects BoringSSL's fatal alert",
-		"Renegotiate-Client-Packed": "a HelloRequest in the same record as the server's Finished is read only when the next record arrives (crypto/tls's read loop), so the test times out instead of the handshake failing with excess handshake data",
 		"ExportKeyingMaterial-Server-HalfRTT-TLS-TLS13": "0-RTT is not implemented (as in crypto/tls); Go's shim accepts -enable-early-data without acting on it, and the test runs only because tlsx's shim implements the exporter flags"
 	}
 }

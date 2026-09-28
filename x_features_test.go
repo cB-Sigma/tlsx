@@ -1242,3 +1242,29 @@ func TestRenegotiationEMSChange(t *testing.T) {
 		}
 	}
 }
+
+// Handshake data in the record of the server's Finished (a packed
+// HelloRequest) is refused at once instead of waiting for the next
+// record (BoGo's Renegotiate-Client-Packed runs it end to end).
+func TestExcessHandshakeDataAfterFinished(t *testing.T) {
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+	c := Client(a, &Config{InsecureSkipVerify: true})
+	if err := c.checkNoExcessHandshakeX(); err != nil {
+		t.Fatalf("empty buffer: %v", err)
+	}
+	c.hand.Write([]byte{typeHelloRequest, 0, 0, 0})
+	alert := make(chan []byte, 1)
+	go func() {
+		buf := make([]byte, 7)
+		n, _ := io.ReadFull(b, buf)
+		alert <- buf[:n]
+	}()
+	if err := c.checkNoExcessHandshakeX(); err == nil {
+		t.Fatal("buffered HelloRequest after Finished accepted")
+	}
+	if got := <-alert; len(got) != 7 || got[0] != byte(recordTypeAlert) || got[6] != byte(alertUnexpectedMessage) {
+		t.Fatalf("sent %x, want an unexpected_message alert", got)
+	}
+}

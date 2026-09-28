@@ -646,6 +646,9 @@ func (hs *clientHandshakeState) handshake() error {
 			return err
 		}
 	}
+	if err := c.checkNoExcessHandshakeX(); err != nil { // tlsx
+		return err
+	}
 	if err := hs.saveSessionTicket(); err != nil {
 		return err
 	}

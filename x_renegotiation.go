@@ -347,6 +347,21 @@ func (c *Conn) checkRenegotiationIdentity(leaf []byte) error {
 	return nil
 }
 
+// checkNoExcessHandshakeX refuses handshake data that came in the same
+// record as the server's Finished (TLS 1.2 client). crypto/tls leaves it
+// buffered until the next record arrives, so a HelloRequest packed with
+// the Finished stalled the client while the server waited for its
+// ClientHello. tlsx refuses it at once with unexpected_message, as
+// BoringSSL does (BoGo's Renegotiate-Client-Packed); TLS 1.3 already
+// refuses buffered handshake data at each change of keys.
+func (c *Conn) checkNoExcessHandshakeX() error {
+	if c.hand.Len() > 0 {
+		c.sendAlert(alertUnexpectedMessage)
+		return errors.New("tlsx: handshake data after the server's Finished in the same record")
+	}
+	return nil
+}
+
 // renegotiationEMSError is the refusal of a renegotiation that changes the
 // use of the extended master secret (RFC 7627): had is the connection's,
 // got the new handshake's. Dropping it would leave the renegotiated
