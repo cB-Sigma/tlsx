@@ -644,6 +644,7 @@ func (hs *clientHandshakeStateTLS13) readServerCertificate() error {
 
 	c.scts = certMsg.certificate.SignedCertificateTimestamps
 	c.ocspResponse = certMsg.certificate.OCSPStaple
+	c.x.ocspResponses = certificateStaples(certMsg.certificate) // tlsx
 
 	if err := c.verifyServerCertificate(certMsg.certificate.Certificate); err != nil {
 		return err
@@ -777,7 +778,7 @@ func (hs *clientHandshakeStateTLS13) sendClientCertificate() error {
 
 	certMsg.certificate = *cert
 	certMsg.scts = hs.certReq.scts && len(cert.SignedCertificateTimestamps) > 0
-	certMsg.ocspStapling = hs.certReq.ocspStapling && len(cert.OCSPStaple) > 0
+	certMsg.ocspStapling = hs.certReq.ocspStapling && (len(cert.OCSPStaple) > 0 || hasStaples(cert.ChainOCSPStaples)) // tlsx
 
 	if _, err := hs.c.writeHandshakeRecord(certMsg, hs.transcript); err != nil {
 		return err
@@ -853,7 +854,7 @@ func (c *Conn) handleNewSessionTicket(msg *newSessionTicketMsgTLS13) error {
 		return errors.New("tls: received new session ticket from a client")
 	}
 
-	if c.config.SessionTicketsDisabled || c.config.ClientSessionCache == nil {
+	if c.config.SessionTicketsDisabled || c.config.ClientSessionCache == nil || c.x.noSessionCache() { // tlsx
 		return nil
 	}
 

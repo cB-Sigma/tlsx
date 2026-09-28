@@ -36,6 +36,7 @@ type serverHandshakeState struct {
 	finishedHash finishedHash
 	masterSecret []byte
 	cert         *Certificate
+	x            serverHandshakeExt // tlsx
 }
 
 // serverHandshake performs a TLS handshake as a server.
@@ -122,6 +123,7 @@ func (hs *serverHandshakeState) handshake() error {
 		if _, err := c.flush(); err != nil {
 			return err
 		}
+		hs.saveSessionID() // tlsx: session-ID resumption
 	}
 
 	c.ekm = ekmFromMasterSecret(c.vers, hs.suite, hs.masterSecret, hs.clientHello.random, hs.hello.random)
@@ -455,12 +457,12 @@ func (hs *serverHandshakeState) cipherSuiteOk(c *cipherSuite) bool {
 func (hs *serverHandshakeState) checkForResumption() error {
 	c := hs.c
 
-	if c.config.SessionTicketsDisabled {
-		return nil
-	}
-
 	var sessionState *SessionState
-	if c.config.UnwrapSession != nil {
+	if ss := hs.sessionFromID(); ss != nil { // tlsx: session-ID resumption
+		sessionState = ss
+	} else if c.config.SessionTicketsDisabled {
+		return nil
+	} else if c.config.UnwrapSession != nil {
 		ss, err := c.config.UnwrapSession(hs.clientHello.sessionTicket, c.connectionStateLocked())
 		if err != nil {
 			return err
@@ -560,6 +562,7 @@ func (hs *serverHandshakeState) checkForResumption() error {
 	hs.suite = suite
 	c.curveID = sessionState.curveID
 	c.didResume = true
+	c.x.sessionCreated = time.Unix(int64(sessionState.createdAt), 0) // tlsx
 	return nil
 }
 
@@ -574,7 +577,10 @@ func (hs *serverHandshakeState) doResumeHandshake() error {
 	// We always send a new session ticket, even if it wraps the same master
 	// secret and it's potentially encrypted with the same key, to help the
 	// client avoid cross-connection tracking from a network observer.
-	hs.hello.ticketSupported = true
+	hs.hello.ticketSupported = hs.clientHello.ticketSupported && !c.config.SessionTicketsDisabled // tlsx: session-ID resumption may come without tickets
+	if err := hs.serverHelloExtensions(); err != nil {                                            // tlsx
+		return err
+	}
 	hs.finishedHash = newFinishedHash(c.vers, hs.suite)
 	hs.finishedHash.discardHandshakeBuffer()
 	if err := transcriptMsg(hs.clientHello, &hs.finishedHash); err != nil {
@@ -612,6 +618,9 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 
 	hs.hello.ticketSupported = hs.clientHello.ticketSupported && !c.config.SessionTicketsDisabled
 	hs.hello.cipherSuite = hs.suite.id
+	if err := hs.serverHelloExtensions(); err != nil { // tlsx
+		return err
+	}
 
 	hs.finishedHash = newFinishedHash(hs.c.vers, hs.suite)
 	if c.config.ClientAuth == NoClientCert {
@@ -623,6 +632,9 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		return err
 	}
 	if _, err := hs.c.writeHandshakeRecord(hs.hello, &hs.finishedHash); err != nil {
+		return err
+	}
+	if err := c.sendSupplemental(hs.hello.x.serverAuthz != nil, &hs.finishedHash); err != nil { // tlsx: RFC 5878
 		return err
 	}
 
@@ -637,9 +649,10 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		return err
 	}
 
-	if hs.hello.ocspStapling {
+	if hs.hello.ocspStapling || hs.hello.x.statusRequestV2 {
 		certStatus := new(certificateStatusMsg)
 		certStatus.response = hs.cert.OCSPStaple
+		hs.certificateStatusV2(certStatus) // tlsx: ocsp_multi
 		if _, err := hs.c.writeHandshakeRecord(certStatus, &hs.finishedHash); err != nil {
 			return err
 		}
@@ -704,6 +717,9 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 
 	msg, err := c.readHandshake(&hs.finishedHash)
 	if err != nil {
+		return err
+	}
+	if msg, err = c.readPeerSupplemental(hs.hello.x.clientAuthz != nil, msg, func() (any, error) { return c.readHandshake(&hs.finishedHash) }); err != nil { // tlsx: RFC 5878
 		return err
 	}
 
@@ -861,6 +877,7 @@ func (hs *serverHandshakeState) establishKeys() error {
 
 	c.in.prepareCipherSpec(c.vers, clientCipher, clientHash)
 	c.out.prepareCipherSpec(c.vers, serverCipher, serverHash)
+	c.in.nextEtm, c.out.nextEtm = hs.x.etm, hs.x.etm // tlsx
 
 	return nil
 }
@@ -1022,6 +1039,7 @@ func (c *Conn) processCertsFromClient(certificate Certificate) error {
 
 	c.peerCertificates = certs
 	c.ocspResponse = certificate.OCSPStaple
+	c.x.ocspResponses = certificateStaples(certificate) // tlsx
 	c.scts = certificate.SignedCertificateTimestamps
 
 	if len(certs) > 0 {
@@ -1069,6 +1087,7 @@ func clientHelloInfo(ctx context.Context, c *Conn, clientHello *clientHelloMsg) 
 		Extensions:        clientHello.extensions,
 		Conn:              conn,
 		HelloRetryRequest: c.didHRR,
+		Ext:               helloExt(c, clientHello), // tlsx
 		config:            c.config,
 		isQUIC:            c.quic != nil,
 		ctx:               ctx,

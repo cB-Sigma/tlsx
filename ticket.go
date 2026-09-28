@@ -402,7 +402,8 @@ func (c *Config) decryptTicket(encrypted []byte, ticketKeys []ticketKey) []byte 
 // ClientSessionState contains the state needed by a client to
 // resume a previous TLS session.
 type ClientSessionState struct {
-	session *SessionState
+	session   *SessionState
+	sessionID []byte // tlsx: TLS 1.2 session ID (ConfigExt.ClientSessionIDs)
 }
 
 // ResumptionState returns the session ticket sent by the server (also known as

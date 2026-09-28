@@ -990,6 +990,8 @@ func TestCloneNonFuncFields(t *testing.T) {
 			f.Set(reflect.ValueOf(RenegotiateOnceAsClient))
 		case "EncryptedClientHelloConfigList":
 			f.Set(reflect.ValueOf([]byte{'x'}))
+		case "Ext": // tlsx
+			f.Set(reflect.ValueOf(ConfigExt{AcceptRenegotiation: true, CipherSuitesTLS13: []uint16{TLS_AES_128_CCM_SHA256}}))
 		case "EncryptedClientHelloKeys":
 			f.Set(reflect.ValueOf([]EncryptedClientHelloKey{
 				{Config: []byte{1}, PrivateKey: []byte{1}},

@@ -335,6 +335,9 @@ type ConnectionState struct {
 	// testingOnlyPeerSignatureAlgorithm is the signature algorithm used by the
 	// peer to sign the handshake. It is not set for resumed connections.
 	testingOnlyPeerSignatureAlgorithm SignatureScheme
+
+	// Ext is the state tlsx adds (x_config.go).
+	Ext StateExt
 }
 
 // ExportKeyingMaterial returns length bytes of exported key material in a new
@@ -494,6 +497,9 @@ type ClientHelloInfo struct {
 	// HelloRetryRequest indicates whether the ClientHello was sent in response
 	// to a HelloRetryRequest message.
 	HelloRetryRequest bool
+
+	// Ext is what tlsx adds from the ClientHello (x_config.go).
+	Ext HelloExt
 
 	// config is embedded by the GetCertificate or GetConfigForClient caller,
 	// for use with SupportsCertificate.
@@ -907,6 +913,9 @@ type Config struct {
 	// clients, see the EncryptedClientHelloConfigList field.
 	EncryptedClientHelloKeys []EncryptedClientHelloKey
 
+	// Ext holds the tlsx settings (x_config.go).
+	Ext ConfigExt
+
 	// mutex protects sessionTicketKeys and autoSessionTicketKeys.
 	mutex sync.RWMutex
 	// sessionTicketKeys contains zero or more ticket keys. If set, it means
@@ -1044,6 +1053,7 @@ func (c *Config) Clone() *Config {
 		EncryptedClientHelloConfigList:      c.EncryptedClientHelloConfigList,
 		EncryptedClientHelloRejectionVerify: c.EncryptedClientHelloRejectionVerify,
 		EncryptedClientHelloKeys:            c.EncryptedClientHelloKeys,
+		Ext:                                 c.Ext,
 		sessionTicketKeys:                   c.sessionTicketKeys,
 		autoSessionTicketKeys:               c.autoSessionTicketKeys,
 	}
@@ -1649,6 +1659,10 @@ type Certificate struct {
 	// SignedCertificateTimestamps contains an optional list of Signed
 	// Certificate Timestamps which will be served to clients that request it.
 	SignedCertificateTimestamps [][]byte
+	// ChainOCSPStaples (tlsx) are OCSP responses for Certificate[1:], index
+	// i for Certificate[i+1] (nil for none): sent per certificate entry in
+	// TLS 1.3 and in an ocsp_multi CertificateStatus (RFC 6961) in TLS 1.2.
+	ChainOCSPStaples [][]byte
 	// Leaf is the parsed form of the leaf certificate, which may be initialized
 	// using x509.ParseCertificate to reduce per-handshake processing. If nil,
 	// the leaf certificate will be parsed as needed.

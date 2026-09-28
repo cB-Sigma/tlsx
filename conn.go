@@ -121,6 +121,8 @@ type Conn struct {
 	activeCall atomic.Int32
 
 	tmp [16]byte
+
+	x connExt // tlsx state (x_conn.go)
 }
 
 // Access to net.Conn methods.
@@ -180,6 +182,8 @@ type halfConn struct {
 	nextCipher any       // next encryption state
 	nextMac    hash.Hash // next MAC algorithm
 
+	etm, nextEtm bool // tlsx: encrypt_then_mac (RFC 7366) now and after the next CCS
+
 	level         QUICEncryptionLevel // current QUIC encryption level
 	trafficSecret []byte              // current TLS 1.3 traffic secret
 }
@@ -218,8 +222,10 @@ func (hc *halfConn) changeCipherSpec() error {
 	}
 	hc.cipher = hc.nextCipher
 	hc.mac = hc.nextMac
+	hc.etm = hc.nextEtm
 	hc.nextCipher = nil
 	hc.nextMac = nil
+	hc.nextEtm = false
 	clear(hc.seq[:])
 	return nil
 }
@@ -382,6 +388,14 @@ func (hc *halfConn) decrypt(record []byte) ([]byte, recordType, error) {
 				return nil, 0, alertBadRecordMAC
 			}
 		case cbcMode:
+			if hc.etm { // tlsx: RFC 7366
+				var err error
+				if plaintext, err = hc.decryptEtM(c, record, payload, explicitNonceLen); err != nil {
+					return nil, 0, err
+				}
+				hc.incSeq()
+				return plaintext, typ, nil
+			}
 			blockSize := c.BlockSize()
 			minPayload := explicitNonceLen + roundUp(hc.mac.Size()+1, blockSize)
 			if len(payload)%blockSize != 0 || len(payload) < minPayload {
@@ -534,6 +548,10 @@ func (hc *halfConn) encrypt(record, payload []byte, rand io.Reader) ([]byte, err
 			record = c.Seal(record, nonce, payload, additionalData)
 		}
 	case cbcMode:
+		if hc.etm { // tlsx: RFC 7366
+			record = hc.encryptEtM(c, record, payload, explicitNonce)
+			break
+		}
 		mac := tls10MAC(hc.mac, hc.scratchBuf[:0], hc.seq[:], record[:recordHeaderLen], payload, nil)
 		blockSize := c.BlockSize()
 		plaintextLen := len(payload) + len(mac)
@@ -687,7 +705,7 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 	if err != nil {
 		return c.in.setErrorLocked(c.sendAlert(err.(alert)))
 	}
-	if len(data) > maxPlaintext {
+	if len(data) > maxPlaintext || c.x.maxFragment > 0 && len(data) > c.x.maxFragment {
 		return c.in.setErrorLocked(c.sendAlert(alertRecordOverflow))
 	}
 
@@ -905,6 +923,13 @@ const (
 // In the interests of simplicity and determinism, this code does not attempt
 // to reset the record size once the connection is idle, however.
 func (c *Conn) maxPayloadSizeForWrite(typ recordType) int {
+	if c.x.maxFragment > 0 { // tlsx: max_fragment_length (RFC 6066 4)
+		return min(c.x.maxFragment, c.maxPayloadSizeForWriteUpstream(typ))
+	}
+	return c.maxPayloadSizeForWriteUpstream(typ)
+}
+
+func (c *Conn) maxPayloadSizeForWriteUpstream(typ recordType) int {
 	if c.config.DynamicRecordSizingDisabled || typ != recordTypeApplicationData {
 		return maxPlaintext
 	}
@@ -1175,6 +1200,8 @@ func (c *Conn) unmarshalHandshakeMessage(data []byte, transcript transcriptHash)
 		m = new(endOfEarlyDataMsg)
 	case typeKeyUpdate:
 		m = new(keyUpdateMsg)
+	case typeSupplementalData: // tlsx: RFC 4680, RFC 5878
+		m = new(supplementalDataMsg)
 	default:
 		return nil, c.in.setErrorLocked(c.sendAlert(alertUnexpectedMessage))
 	}
@@ -1676,6 +1703,7 @@ func (c *Conn) connectionStateLocked() ConnectionState {
 		state.ekm = c.ekm
 	}
 	state.ECHAccepted = c.echAccepted
+	c.x.state(c, &state) // tlsx
 	return state
 }
 

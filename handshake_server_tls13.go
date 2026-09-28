@@ -861,7 +861,7 @@ func (hs *serverHandshakeStateTLS13) sendServerCertificate() error {
 
 	certMsg.certificate = *hs.cert
 	certMsg.scts = hs.clientHello.scts && len(hs.cert.SignedCertificateTimestamps) > 0
-	certMsg.ocspStapling = hs.clientHello.ocspStapling && len(hs.cert.OCSPStaple) > 0
+	certMsg.ocspStapling = hs.clientHello.ocspStapling && (len(hs.cert.OCSPStaple) > 0 || hasStaples(hs.cert.ChainOCSPStaples)) // tlsx: chain staples
 
 	if _, err := hs.c.writeHandshakeRecord(certMsg, hs.transcript); err != nil {
 		return err
@@ -950,7 +950,7 @@ func (hs *serverHandshakeStateTLS13) sendServerFinished() error {
 }
 
 func (hs *serverHandshakeStateTLS13) shouldSendSessionTickets() bool {
-	if hs.c.config.SessionTicketsDisabled {
+	if hs.c.config.SessionTicketsDisabled || hs.c.x.noSessionCache() { // tlsx
 		return false
 	}
 

@@ -37,6 +37,7 @@ type clientHandshakeState struct {
 	masterSecret []byte
 	session      *SessionState // the session being resumed
 	ticket       []byte        // a fresh ticket received during this handshake
+	etm          bool          // tlsx: encrypt_then_mac negotiated
 }
 
 func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echClientContext, error) {
@@ -187,6 +188,7 @@ func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echCli
 		}
 		ech = &echClientContext{config: echConfig, kdfID: kdf.ID(), aeadID: aead.ID()}
 		hello.encryptedClientHello = []byte{1} // indicate inner hello
+		hello.x = clientHelloExt{}             // tlsx: no tlsx extensions with ECH
 		// We need to explicitly set these 1.2 fields to nil, as we do not
 		// marshal them when encoding the inner hello, otherwise transcripts
 		// will later mismatch.
@@ -202,6 +204,11 @@ func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echCli
 		}
 	}
 
+	if ech == nil {
+		if err := c.clientHelloExtensions(hello, maxVersion, minVersion); err != nil { // tlsx
+			return nil, nil, nil, err
+		}
+	}
 	return hello, keyShareKeys, ech, nil
 }
 
@@ -373,7 +380,7 @@ var fips140ems = godebug.New("fips140ems")
 
 func (c *Conn) loadSession(hello *clientHelloMsg) (
 	session *SessionState, earlySecret *tls13.EarlySecret, binderKey []byte, err error) {
-	if c.config.SessionTicketsDisabled || c.config.ClientSessionCache == nil {
+	if c.config.SessionTicketsDisabled && !c.config.Ext.ClientSessionIDs || c.config.ClientSessionCache == nil { // tlsx: session IDs without tickets
 		return nil, nil, nil, nil
 	}
 
@@ -381,7 +388,7 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (
 
 	// ticketSupported is a TLS 1.2 extension (as TLS 1.3 replaced tickets with PSK
 	// identities) and ECH requires and forces TLS 1.3.
-	hello.ticketSupported = true && !echInner
+	hello.ticketSupported = !c.config.SessionTicketsDisabled && !echInner // tlsx: false with session IDs only
 
 	if hello.supportedVersions[0] == VersionTLS13 {
 		// Require DHE on resumption as it guarantees forward secrecy against
@@ -462,6 +469,9 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (
 		}
 
 		hello.sessionTicket = session.ticket
+		if session.ticket == nil && cs.sessionID != nil { // tlsx: resume by session ID
+			hello.sessionId = cs.sessionID
+		}
 		return
 	}
 
@@ -665,6 +675,9 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 	if err != nil {
 		return err
 	}
+	if msg, err = c.readPeerSupplemental(hs.serverHello.x.serverAuthz != nil, msg, func() (any, error) { return c.readHandshake(&hs.finishedHash) }); err != nil { // tlsx: RFC 5878
+		return err
+	}
 	certMsg, ok := msg.(*certificateMsg)
 	if !ok || len(certMsg.certificates) == 0 {
 		c.sendAlert(alertUnexpectedMessage)
@@ -681,7 +694,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		// RFC4366 on Certificate Status Request:
 		// The server MAY return a "certificate_status" message.
 
-		if !hs.serverHello.ocspStapling {
+		if !hs.serverHello.ocspStapling && !hs.serverHello.x.statusRequestV2 { // tlsx: or ocsp_multi
 			// If a server returns a "CertificateStatus" message, then the
 			// server MUST have included an extension of type "status_request"
 			// with empty "extension_data" in the extended server hello.
@@ -691,6 +704,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		}
 
 		c.ocspResponse = cs.response
+		c.x.ocspResponses = cs.x.responses // tlsx: ocsp_multi
 
 		msg, err = c.readHandshake(&hs.finishedHash)
 		if err != nil {
@@ -748,6 +762,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 	if ok {
 		certRequested = true
 
+		c.x.peerCAs = certReq.certificateAuthorities // tlsx
 		cri := certificateRequestInfoFromMsg(hs.ctx, c.vers, certReq)
 		if chainToSend, err = c.getClientCertificateX(cri); err != nil { // tlsx: RFC 7250
 			c.sendAlert(alertInternalError)
@@ -770,6 +785,9 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		return unexpectedMessageError(shd, msg)
 	}
 
+	if err := c.sendSupplemental(hs.serverHello.x.clientAuthz != nil, &hs.finishedHash); err != nil { // tlsx: RFC 5878
+		return err
+	}
 	// If the server requested a certificate then we have to send a
 	// Certificate message, even if it's empty because we don't have a
 	// certificate to send.
@@ -894,6 +912,7 @@ func (hs *clientHandshakeState) establishKeys() error {
 
 	c.in.prepareCipherSpec(c.vers, serverCipher, serverHash)
 	c.out.prepareCipherSpec(c.vers, clientCipher, clientHash)
+	c.in.nextEtm, c.out.nextEtm = hs.etm, hs.etm // tlsx
 	return nil
 }
 
@@ -945,6 +964,10 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 			c.sendAlert(alertHandshakeFailure)
 			return false, fmt.Errorf("%w: incorrect renegotiation extension contents", ErrInsecureRenegotiation) // tlsx: wrapped
 		}
+	}
+
+	if err := c.processServerHelloExtensions(hs); err != nil { // tlsx
+		return false, err
 	}
 
 	if err := checkALPN(hs.hello.alpnProtocols, hs.serverHello.alpnProtocol, false); err != nil {
@@ -1075,6 +1098,9 @@ func (hs *clientHandshakeState) readSessionTicket() error {
 func (hs *clientHandshakeState) saveSessionTicket() error {
 	if hs.c.x.noSessionCache() { // tlsx: PSK and raw key sessions carry no identity
 		return nil
+	}
+	if hs.ticket == nil {
+		return hs.saveSessionID() // tlsx
 	}
 	c := hs.c
 

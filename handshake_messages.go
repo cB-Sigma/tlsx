@@ -100,6 +100,7 @@ type clientHelloMsg struct {
 	encryptedClientHello             []byte
 	// extensions are only populated on the server-side of a handshake
 	extensions []uint16
+	x          clientHelloExt // tlsx extensions (x_messages.go)
 }
 
 func (m *clientHelloMsg) marshalMsg(echInner bool) ([]byte, error) {
@@ -318,6 +319,7 @@ func (m *clientHelloMsg) marshalMsg(echInner bool) ([]byte, error) {
 			})
 		})
 	}
+	m.x.marshal(&exts, echInner) // tlsx
 	// pre_shared_key must be the last extension
 	if len(m.pskIdentities) > 0 && (echInner || len(m.encryptedClientHello) == 0 || bytes.Equal(m.encryptedClientHello, []byte{byte(innerECHExt)})) {
 		// RFC 8446, Section 4.2.11
@@ -669,8 +671,11 @@ func (m *clientHelloMsg) unmarshal(data []byte) bool {
 				return false
 			}
 		default:
-			// Ignore unknown extensions.
-			continue
+			if handled, ok := m.x.unmarshal(extension, &extData); !handled { // tlsx
+				continue // Ignore unknown extensions.
+			} else if !ok {
+				return false
+			}
 		}
 
 		if !extData.Empty() {
@@ -715,6 +720,7 @@ func (m *clientHelloMsg) clone() *clientHelloMsg {
 		pskBinders:                       slices.Clone(m.pskBinders),
 		quicTransportParameters:          slices.Clone(m.quicTransportParameters),
 		encryptedClientHello:             slices.Clone(m.encryptedClientHello),
+		x:                                m.x.clone(),
 	}
 }
 
@@ -743,6 +749,8 @@ type serverHelloMsg struct {
 	// HelloRetryRequest extensions
 	cookie        []byte
 	selectedGroup CurveID
+
+	x serverHelloExt // tlsx extensions (x_messages.go)
 }
 
 func (m *serverHelloMsg) marshal() ([]byte, error) {
@@ -843,6 +851,7 @@ func (m *serverHelloMsg) marshal() ([]byte, error) {
 		exts.AddUint16(extensionServerName)
 		exts.AddUint16(0)
 	}
+	m.x.marshal(&exts) // tlsx
 
 	extBytes, err := exts.Bytes()
 	if err != nil {
@@ -986,8 +995,11 @@ func (m *serverHelloMsg) unmarshal(data []byte) bool {
 			}
 			m.serverNameAck = true
 		default:
-			// Ignore unknown extensions.
-			continue
+			if handled, ok := m.x.unmarshal(extension, &extData); !handled { // tlsx
+				continue // Ignore unknown extensions.
+			} else if !ok {
+				return false
+			}
 		}
 
 		if !extData.Empty() {
@@ -1495,6 +1507,7 @@ func (m *certificateMsgTLS13) marshal() ([]byte, error) {
 		certificate := m.certificate
 		if !m.ocspStapling {
 			certificate.OCSPStaple = nil
+			certificate.ChainOCSPStaples = nil // tlsx
 		}
 		if !m.scts {
 			certificate.SignedCertificateTimestamps = nil
@@ -1513,7 +1526,16 @@ func marshalCertificate(b *cryptobyte.Builder, certificate Certificate) {
 			})
 			b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
 				if i > 0 {
-					// This library only supports OCSP and SCT for leaf certificates.
+					// tlsx: OCSP for the chain (RFC 8446 4.4.2.1); SCTs only for the leaf.
+					if i-1 < len(certificate.ChainOCSPStaples) && len(certificate.ChainOCSPStaples[i-1]) > 0 {
+						b.AddUint16(extensionStatusRequest)
+						b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
+							b.AddUint8(statusTypeOCSP)
+							b.AddUint24LengthPrefixed(func(b *cryptobyte.Builder) {
+								b.AddBytes(certificate.ChainOCSPStaples[i-1])
+							})
+						})
+					}
 					return
 				}
 				if certificate.OCSPStaple != nil {
@@ -1555,7 +1577,7 @@ func (m *certificateMsgTLS13) unmarshal(data []byte) bool {
 	}
 
 	m.scts = m.certificate.SignedCertificateTimestamps != nil
-	m.ocspStapling = m.certificate.OCSPStaple != nil
+	m.ocspStapling = m.certificate.OCSPStaple != nil || m.certificate.ChainOCSPStaples != nil
 
 	return true
 }
@@ -1581,7 +1603,19 @@ func unmarshalCertificate(s *cryptobyte.String, certificate *Certificate) bool {
 				return false
 			}
 			if len(certificate.Certificate) > 1 {
-				// This library only supports OCSP and SCT for leaf certificates.
+				// tlsx: keep OCSP responses for the chain; SCTs only for the leaf.
+				if extension == extensionStatusRequest {
+					var statusType uint8
+					var staple []byte
+					if !extData.ReadUint8(&statusType) || statusType != statusTypeOCSP ||
+						!readUint24LengthPrefixed(&extData, &staple) || len(staple) == 0 || !extData.Empty() {
+						return false
+					}
+					for len(certificate.ChainOCSPStaples) < len(certificate.Certificate)-2 {
+						certificate.ChainOCSPStaples = append(certificate.ChainOCSPStaples, nil)
+					}
+					certificate.ChainOCSPStaples = append(certificate.ChainOCSPStaples, staple)
+				}
 				continue
 			}
 
@@ -1646,9 +1680,13 @@ func (m *serverKeyExchangeMsg) unmarshal(data []byte) bool {
 
 type certificateStatusMsg struct {
 	response []byte
+	x        certificateStatusExt // tlsx: ocsp_multi (RFC 6961)
 }
 
 func (m *certificateStatusMsg) marshal() ([]byte, error) {
+	if m.x.multi { // tlsx
+		return m.x.marshal()
+	}
 	var b cryptobyte.Builder
 	b.AddUint8(typeCertificateStatus)
 	b.AddUint24LengthPrefixed(func(b *cryptobyte.Builder) {
@@ -1662,6 +1700,9 @@ func (m *certificateStatusMsg) marshal() ([]byte, error) {
 }
 
 func (m *certificateStatusMsg) unmarshal(data []byte) bool {
+	if len(data) > 4 && data[4] == statusTypeOCSPMulti { // tlsx
+		return m.x.unmarshal(data, &m.response)
+	}
 	s := cryptobyte.String(data)
 
 	var statusType uint8

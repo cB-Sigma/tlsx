@@ -16,7 +16,8 @@
 // GOFIPS140, and may change across Go versions.
 //
 // [FIPS 140-3 mode]: https://go.dev/doc/security/fips140
-package tlsx
+
+package tlsx // tlsx: the package documentation is in doc.go
 
 // BUG(agl): The crypto/tls package only implements some countermeasures
 // against Lucky13 attacks on CBC-mode encryption, and only on SHA1
