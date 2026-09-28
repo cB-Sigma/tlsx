@@ -1,0 +1,54 @@
+# Copyright 2026 Abhinav Gautam. Use of this source code is governed
+# by the BSD-style licence in the LICENSE file.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        # The interoperability tests run in the interop job, with current
+        # OpenSSL and GnuTLS builds.
+        env:
+          TLSX_SKIP_INTEROP: "1"
+        run: go test -race -timeout 20m ./...
+      - name: provenance is up to date
+        run: scripts/provenance.sh --check
+
+  interop:
+    # Homebrew has current OpenSSL 3 and GnuTLS releases (raw public keys
+    # need OpenSSL 3.2+; the integrity-only suites need a recent 3.x).
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: install OpenSSL and GnuTLS
+        run: |
+          brew install openssl@3 gnutls
+          echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
+      - name: versions
+        run: |
+          openssl version
+          gnutls-cli --version | head -1
+      - name: OpenSSL and GnuTLS interoperability tests
+        run: |
+          go test -race -count=1 -v -timeout 20m -run 'OpenSSL|GnuTLS' ./... | tee interop.log
+          # An interoperability test that skipped is a failure here.
+          if grep -E -e '--- SKIP' interop.log; then echo "interop tests skipped"; exit 1; fi

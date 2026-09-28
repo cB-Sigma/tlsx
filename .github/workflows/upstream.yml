@@ -1,0 +1,94 @@
+# Copyright 2026 Abhinav Gautam. Use of this source code is governed
+# by the BSD-style licence in the LICENSE file.
+#
+# Weekly: look for a Go release newer than UPSTREAM.md's base (the latest
+# stable release, whatever its major version), dry-run the sync, then merge
+# it on a scratch checkout and run the tests, and open an issue with the
+# patch and the results. Nothing is pushed; a maintainer does the sync.
+name: upstream
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: latest stable Go
+        id: latest
+        run: |
+          latest="$(curl -fsSL 'https://go.dev/dl/?mode=json' | jq -r '.[0].version')"
+          base="$(sed -n 's/^Base: *\(go[0-9.]*\).*/\1/p' UPSTREAM.md | head -1)"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "base $base, latest $latest"
+      - name: dry run
+        if: steps.latest.outputs.latest != steps.latest.outputs.base
+        id: dry
+        env:
+          SYNC_SUMMARY: summary.md
+        run: |
+          set +e
+          scripts/sync-upstream.sh "${{ steps.latest.outputs.latest }}"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+      - name: merge and test
+        if: steps.latest.outputs.latest != steps.latest.outputs.base
+        env:
+          SYNC_SUMMARY: summary.md
+          TLSX_SKIP_INTEROP: "1"
+        run: |
+          set +e
+          scripts/sync-upstream.sh "${{ steps.latest.outputs.latest }}" --apply
+          {
+            echo
+            echo "### Tests after the merge (Go ${{ steps.latest.outputs.latest }})"
+            echo
+            echo '```'
+            GOTOOLCHAIN="${{ steps.latest.outputs.latest }}" go vet ./... 2>&1 | tail -n 40
+            GOTOOLCHAIN="${{ steps.latest.outputs.latest }}" go test -timeout 20m ./... 2>&1 | tail -n 60
+            echo '```'
+            echo
+            echo "Conflict markers and failing tests are expected when the merge reports conflicts."
+          } >> summary.md
+      - name: open or update an issue
+        if: steps.latest.outputs.latest != steps.latest.outputs.base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Upstream sync: ${{ steps.latest.outputs.base }} -> ${{ steps.latest.outputs.latest }}"
+          patch="$(ls upstream-*.patch 2>/dev/null | head -1)"
+          {
+            cat summary.md
+            echo
+            echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} (the patch is attached as an artifact)."
+            if [ -n "$patch" ] && [ "$(wc -c < "$patch")" -lt 50000 ]; then
+              echo
+              echo "<details><summary>$patch</summary>"
+              echo
+              echo '```diff'
+              cat "$patch"
+              echo '```'
+              echo "</details>"
+            fi
+          } > body.md
+          n="$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')"
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body-file body.md
+          else
+            gh issue create --title "$title" --body-file body.md
+          fi
+      - uses: actions/upload-artifact@v4
+        if: steps.latest.outputs.latest != steps.latest.outputs.base
+        with:
+          name: upstream-patch
+          path: upstream-*.patch
