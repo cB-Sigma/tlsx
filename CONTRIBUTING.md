@@ -33,6 +33,11 @@ is Go's, and keeping it easy to sync with Go comes first.
   fix that can't wait goes into tlsx as a marked hook, with a link to the
   upstream issue.
 - **Upstream syncs.** Follow UPSTREAM.md.
+- **Blame.** Go's lines keep their Go authors in `git blame` once you run
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs` (GitHub does this
+  by itself). Keep mechanical rewrites in commits of their own, titled
+  `mechanical: ...`, and add them to `.git-blame-ignore-revs`; the sync
+  script does this for its rewrite commits.
 
 ## Before sending a pull request
 

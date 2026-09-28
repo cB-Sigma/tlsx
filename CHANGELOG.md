@@ -31,5 +31,8 @@ module of its own, `github.com/cB-Abhinav-Gautam/tlsx`.
 - Provenance: every file is classified in PROVENANCE.md
   (`scripts/provenance.sh`). Go's headers are kept, and Go-derived passages
   in tlsx's own files are credited (NOTICE).
-- `scripts/sync-upstream.sh` merges new Go releases. A weekly workflow
-  reports new releases with a dry run and test results.
+- The repository carries Go's own history of the files it derives from
+  (`scripts/filter-upstream.sh`), so `git blame` names Go's authors.
+  `scripts/sync-upstream.sh` merges new Go releases as git merges of that
+  history. A weekly workflow runs the sync on a scratch branch and reports
+  the result and test results.

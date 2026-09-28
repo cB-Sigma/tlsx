@@ -64,6 +64,9 @@ scripts/provenance.sh	(c)	tlsx
 scripts/provenance-notes.tsv	(c)	tlsx
 scripts/sync-upstream.sh	(c)	tlsx; successor of SigmaM2M's tlsx-sync.sh (same author)
 scripts/upstream-lib.sh	(c)	tlsx
+scripts/filter-upstream.sh	(c)	tlsx; runs git filter-repo over Go's history
+.git-blame-ignore-revs	(c)	tlsx; mechanical commits for git blame to pass over
+docs/upstream-commit-map.txt	(c)	tlsx; generated from git filter-repo's commit-map (Go commit IDs and ours)
 .github/workflows/ci.yml	(c)	tlsx
 .github/workflows/upstream.yml	(c)	tlsx
 x_example_test.go	(c)	tlsx

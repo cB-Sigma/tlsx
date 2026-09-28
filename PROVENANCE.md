@@ -7,6 +7,7 @@ Classes: (a) Go's file, unchanged or only mechanically rewritten;
 
 | File | Class | Source | Notes |
 |---|---|---|---|
+| `.git-blame-ignore-revs` | (c) | tlsx | mechanical commits for git blame to pass over |
 | `.github/workflows/ci.yml` | (c) | tlsx |  |
 | `.github/workflows/upstream.yml` | (c) | tlsx |  |
 | `.gitignore` | (c) | tlsx |  |
@@ -32,6 +33,7 @@ Classes: (a) Go's file, unchanged or only mechanically rewritten;
 | `defaults.go` | (a) | Go go1.27.1 `src/crypto/tls/defaults.go` | identical after the mechanical rewrite |
 | `defaults_fips140.go` | (a) | Go go1.27.1 `src/crypto/tls/defaults_fips140.go` | identical after the mechanical rewrite |
 | `doc.go` | (c) | tlsx | package documentation; Go's package doc stays in tls.go |
+| `docs/upstream-commit-map.txt` | (c) | tlsx | generated from git filter-repo's commit-map (Go commit IDs and ours) |
 | `ech.go` | (a) | Go go1.27.1 `src/crypto/tls/ech.go` | identical after the mechanical rewrite |
 | `ech_test.go` | (a) | Go go1.27.1 `src/crypto/tls/ech_test.go` | identical after the mechanical rewrite |
 | `gcm_tls.go` | (c) | tlsx | our own code; applies always the TLS 1.2 GCM nonce check Go's FIPS GCM applies in FIPS mode |
@@ -78,6 +80,7 @@ Classes: (a) Go's file, unchanged or only mechanically rewritten;
 | `prf_test.go` | (a) | Go go1.27.1 `src/crypto/tls/prf_test.go` | identical after the mechanical rewrite |
 | `quic.go` | (a) | Go go1.27.1 `src/crypto/tls/quic.go` | identical after the mechanical rewrite |
 | `quic_test.go` | (a) | Go go1.27.1 `src/crypto/tls/quic_test.go` | identical after the mechanical rewrite |
+| `scripts/filter-upstream.sh` | (c) | tlsx | runs git filter-repo over Go's history |
 | `scripts/provenance-notes.tsv` | (c) | tlsx |  |
 | `scripts/provenance.sh` | (c) | tlsx |  |
 | `scripts/sync-upstream.sh` | (c) | tlsx | successor of SigmaM2M's tlsx-sync.sh (same author) |

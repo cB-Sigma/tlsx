@@ -89,13 +89,22 @@ takes a `*tls.Config`, such as `net/http`, needs an adapter, for example a
 
 ## How it tracks upstream
 
-tlsx carries Go's files with small, marked changes. A script brings each
-new Go release in:
-- It extracts the base release and the new one with the same mechanical
-  rewrite, and merges the difference into tlsx file by file.
-- Conflicts appear only where upstream changed lines that tlsx changed.
-- A weekly GitHub workflow checks for a new stable Go release. It dry-runs
-  the sync and opens an issue with the result.
+tlsx carries Go's files with small, marked changes, on top of Go's own
+history:
+- The repository's history starts with every Go commit that touched the
+  files tlsx carries, rewritten to tlsx's layout by `git filter-repo` and
+  otherwise unchanged. `git blame` names the Go author and commit of each
+  Go line; the ID map is in `docs/upstream-commit-map.txt`.
+- The package rename and import rewrites are separate `mechanical:`
+  commits, listed in `.git-blame-ignore-revs`. GitHub's blame view reads
+  that file; locally, run
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs` once, and
+  rewritten lines blame to the Go commits that wrote them.
+- A new Go release comes in as a git merge of its filtered history
+  (`scripts/sync-upstream.sh`), followed by a mechanical rewrite commit.
+  Conflicts appear only where upstream changed lines that tlsx changed.
+- A weekly GitHub workflow checks for a new stable Go release, runs the
+  sync on a scratch branch and opens an issue with the result.
 - Go's own crypto/tls tests run in this repository, apart from a documented
   list of skips.
 

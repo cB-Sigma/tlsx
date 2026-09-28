@@ -1,0 +1,9 @@
+# Commits that only rewrite Go's code mechanically (package name, imports,
+# BoringCrypto and FIPS-module calls): git blame passes over them to the Go
+# commits that wrote the lines. GitHub reads this file; locally, run once:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# scripts/sync-upstream.sh appends the rewrite commit of each sync.
+# mechanical: rename package and rewrite Go-internal imports
+33d53437049b90e96a887b73adfd22efae496281
+# mechanical: replace BoringCrypto and FIPS-module calls with public crypto packages
+c550d201ddd16ca5b97f6d625b2327c8ba80de75

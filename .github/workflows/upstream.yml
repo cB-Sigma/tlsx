@@ -2,9 +2,11 @@
 # by the BSD-style licence in the LICENSE file.
 #
 # Weekly: look for a Go release newer than UPSTREAM.md's base (the latest
-# stable release, whatever its major version), dry-run the sync, then merge
-# it on a scratch checkout and run the tests, and open an issue with the
-# patch and the results. Nothing is pushed; a maintainer does the sync.
+# stable release, whatever its major version), run scripts/sync-upstream.sh
+# on a scratch branch (filter Go's history, check that the filter still
+# reproduces upstream/<base>, git merge the new release, commit the
+# mechanical rewrite, run the checks), and open an issue with the result.
+# Nothing is pushed; a maintainer runs the sync on main.
 name: upstream
 
 on:
@@ -17,13 +19,34 @@ permissions:
   issues: write
 
 jobs:
-  check:
+  sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The sync merges Go's history: it needs all of ours, with tags.
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-go@v5
         with:
           go-version: stable
+      - name: tools
+        run: |
+          pip install git-filter-repo==2.47.0
+          git config --global user.name "tlsx upstream check"
+          git config --global user.email "tlsx-upstream@users.noreply.github.com"
+      - name: Go's repository
+        uses: actions/cache@v4
+        with:
+          path: go-upstream
+          key: go-upstream-${{ github.run_id }}
+          restore-keys: go-upstream-
+      - name: clone or fetch Go
+        run: |
+          if [ ! -d go-upstream ]; then
+            git clone -q --no-checkout https://go.googlesource.com/go go-upstream
+          fi
+          git -C go-upstream fetch -q --tags origin
       - name: latest stable Go
         id: latest
         run: |
@@ -32,33 +55,28 @@ jobs:
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "base $base, latest $latest"
-      - name: dry run
+      - name: sync on a scratch branch
         if: steps.latest.outputs.latest != steps.latest.outputs.base
-        id: dry
+        id: sync
         env:
           SYNC_SUMMARY: summary.md
-        run: |
-          set +e
-          scripts/sync-upstream.sh "${{ steps.latest.outputs.latest }}"
-          echo "status=$?" >> "$GITHUB_OUTPUT"
-      - name: merge and test
-        if: steps.latest.outputs.latest != steps.latest.outputs.base
-        env:
-          SYNC_SUMMARY: summary.md
+          TLSX_GO_REPO: ${{ github.workspace }}/go-upstream
           TLSX_SKIP_INTEROP: "1"
+          GOTOOLCHAIN: ${{ steps.latest.outputs.latest }}
         run: |
+          git switch -c "upstream-sync-${{ steps.latest.outputs.latest }}"
           set +e
-          scripts/sync-upstream.sh "${{ steps.latest.outputs.latest }}" --apply
+          scripts/sync-upstream.sh --no-fetch "${{ steps.latest.outputs.latest }}"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
           {
             echo
-            echo "### Tests after the merge (Go ${{ steps.latest.outputs.latest }})"
-            echo
-            echo '```'
-            GOTOOLCHAIN="${{ steps.latest.outputs.latest }}" go vet ./... 2>&1 | tail -n 40
-            GOTOOLCHAIN="${{ steps.latest.outputs.latest }}" go test -timeout 20m ./... 2>&1 | tail -n 60
-            echo '```'
-            echo
-            echo "Conflict markers and failing tests are expected when the merge reports conflicts."
+            case "$status" in
+            0) echo "Result: merged and checked; run the sync on main." ;;
+            2) echo "Result: conflicts left for a maintainer (listed above)." ;;
+            3) echo "Result: merged, but the checks failed (above)." ;;
+            *) echo "Result: the sync failed (status $status); see the workflow log." ;;
+            esac
           } >> summary.md
       - name: open or update an issue
         if: steps.latest.outputs.latest != steps.latest.outputs.base
@@ -66,20 +84,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="Upstream sync: ${{ steps.latest.outputs.base }} -> ${{ steps.latest.outputs.latest }}"
-          patch="$(ls upstream-*.patch 2>/dev/null | head -1)"
           {
             cat summary.md
             echo
-            echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} (the patch is attached as an artifact)."
-            if [ -n "$patch" ] && [ "$(wc -c < "$patch")" -lt 50000 ]; then
-              echo
-              echo "<details><summary>$patch</summary>"
-              echo
-              echo '```diff'
-              cat "$patch"
-              echo '```'
-              echo "</details>"
-            fi
+            echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > body.md
           n="$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')"
           if [ -n "$n" ]; then
@@ -87,8 +95,3 @@ jobs:
           else
             gh issue create --title "$title" --body-file body.md
           fi
-      - uses: actions/upload-artifact@v4
-        if: steps.latest.outputs.latest != steps.latest.outputs.base
-        with:
-          name: upstream-patch
-          path: upstream-*.patch
