@@ -61,9 +61,10 @@ type connExt struct {
 	peerCAs        [][]byte
 	peerAttrCerts  [][]byte // RFC 5878
 
-	pskIdentity, pskHint  []byte // the PSK identity used, a TLS 1.2 client's hint
-	pskOffered            []byte // TLS 1.3 client: the external identity offered
-	peerRawKey, ownRawKey bool   // RFC 7250 raw public key negotiated per side
+	pskIdentity, pskHint  []byte      // the PSK identity used, a TLS 1.2 client's hint
+	pskOffered            []byte      // TLS 1.3 client: the external identity offered
+	pskBinding            *pskBinding // a resumable TLS 1.2 PSK session's binding (x_psk_resume.go)
+	peerRawKey, ownRawKey bool        // RFC 7250 raw public key negotiated per side
 	peerRawKeySPKI        []byte
 }
 

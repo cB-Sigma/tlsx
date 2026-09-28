@@ -38,8 +38,9 @@ import (
 // identity, psk_dhe_ke is preferred, and a PSK is meant for one pair of
 // peers. Imported PSKs (RFC 9258) are not implemented.
 //
-// Sessions of PSK handshakes are neither resumed nor ticketed: resumption
-// would carry no identity.
+// Sessions of TLS 1.2 PSK handshakes are resumed only with
+// PSKConfig.Resumption, bound to their PSK (x_psk_resume.go); sessions of
+// TLS 1.3 external-PSK handshakes are neither resumed nor ticketed.
 
 // TLS 1.2 PSK cipher suites tlsx adds.
 const (
@@ -100,6 +101,17 @@ type PSKConfig struct {
 	// Hash is the TLS 1.3 PSK's hash, crypto.SHA256 (the default) or
 	// crypto.SHA384; only TLS 1.3 suites with that hash can use it.
 	Hash crypto.Hash
+	// Resumption allows TLS 1.2 PSK sessions to be resumed (session tickets
+	// as upstream, session IDs with Config.Ext.ServerSessionCache and
+	// ClientSessionIDs). A session stays bound to its PSK: before resuming
+	// it, a server calls Lookup and a client uses Identity and Key or
+	// ClientKey (with the hint of the session's full handshake), and the
+	// session is resumed only if the identity still has the same key, so
+	// removing or changing a key ends resumption of its sessions. Off:
+	// every PSK handshake is a full one. TLS 1.3 sessions of external-PSK
+	// handshakes are not resumed.
+	Resumption bool
+
 	// AllowNoDHE allows TLS 1.3 psk_ke, a key exchange without (EC)DHE
 	// and so without forward secrecy. A client then offers both modes; a
 	// server uses psk_ke only when the client offers nothing else or
@@ -346,14 +358,18 @@ func (hs *serverHandshakeState) doFullHandshakePSK() error {
 	if hs.clientHello.serverName != "" {
 		hs.hello.serverNameAck = true
 	}
-	hs.hello.ticketSupported = false // no resumption without the identity
+	// A session ticket only when the session can be resumed (bound to the
+	// PSK, x_psk_resume.go), as doFullHandshake decides otherwise.
+	hs.hello.ticketSupported = p.Resumption && hs.clientHello.ticketSupported && !c.config.SessionTicketsDisabled
 	hs.hello.ocspStapling = false
 	hs.hello.scts = nil
 	hs.hello.cipherSuite = hs.suite.id
 	if err := hs.serverHelloExtensions(); err != nil {
 		return err
 	}
-	hs.hello.sessionId = nil
+	if !p.Resumption {
+		hs.hello.sessionId = nil // no session to resume by ID either
+	}
 	hs.finishedHash = newFinishedHash(c.vers, hs.suite)
 	hs.finishedHash.discardHandshakeBuffer()
 	if err := transcriptMsg(hs.clientHello, &hs.finishedHash); err != nil {
@@ -467,6 +483,7 @@ func (hs *serverHandshakeState) doFullHandshakePSK() error {
 		return fmt.Errorf("%w %q", ErrUnknownPSKIdentity, identity)
 	}
 	c.x.pskIdentity = slices.Clone(identity)
+	c.x.bindPSK(p, identity, p.Hint, key)
 	hs.masterSecret = hs.pskMasterSecret(pskPremaster(other, key))
 	if err := c.config.writeKeyLog(keyLogLabelTLS12, hs.clientHello.random, hs.masterSecret); err != nil {
 		c.sendAlert(alertInternalError)
@@ -622,6 +639,7 @@ func (hs *clientHandshakeState) doFullHandshakePSK() error {
 	}
 	c.x.pskIdentity = slices.Clone(identity)
 	c.x.pskHint = slices.Clone(hint)
+	c.x.bindPSK(p, identity, hint, key)
 	pms := pskPremaster(other, key)
 	if hs.serverHello.extendedMasterSecret {
 		c.extMasterSecret = true
@@ -811,8 +829,9 @@ func (hs *serverHandshakeStateTLS13) checkExternalPSK() (done bool, err error) {
 }
 
 // noSessionCache says the connection's session must not be cached,
-// ticketed or resumed: a PSK or raw public key handshake, whose
-// identity a resumption would not carry.
+// ticketed or resumed: a raw public key handshake, whose identity a
+// resumption would not carry, or a PSK handshake unless the session is
+// bound to its PSK (PSKConfig.Resumption, TLS 1.2; x_psk_resume.go).
 func (x *connExt) noSessionCache() bool {
-	return x.pskIdentity != nil || x.peerRawKey || x.ownRawKey
+	return x.pskIdentity != nil && x.pskBinding == nil || x.peerRawKey || x.ownRawKey
 }

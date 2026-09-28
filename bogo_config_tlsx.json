@@ -1,11 +1,5 @@
 {
 	"ExpectedFailures": {
-		"TLS-TLS12-*PSK_WITH_*-client": "tlsx does not resume PSK sessions: a resumed session would carry no PSK identity (x_psk.go)",
-		"TLS-TLS12-*PSK_WITH_*-server": "tlsx does not resume PSK sessions: a resumed session would carry no PSK identity (x_psk.go)",
-		"TLS-TLS1-*PSK_WITH_AES_*_CBC_SHA-client": "tlsx does not resume PSK sessions: a resumed session would carry no PSK identity (x_psk.go)",
-		"TLS-TLS1-*PSK_WITH_AES_*_CBC_SHA-server": "tlsx does not resume PSK sessions: a resumed session would carry no PSK identity (x_psk.go)",
-		"TLS-TLS11-*PSK_WITH_AES_*_CBC_SHA-client": "tlsx does not resume PSK sessions: a resumed session would carry no PSK identity (x_psk.go)",
-		"TLS-TLS11-*PSK_WITH_AES_*_CBC_SHA-server": "tlsx does not resume PSK sessions: a resumed session would carry no PSK identity (x_psk.go)",
 		"Renegotiate-Client": "the runner takes any session ID in a renegotiation ClientHello for a resumption offer; tlsx, like crypto/tls, always sends a random 32-byte session ID and offers no session when renegotiating",
 		"Renegotiate-Client-TLS12": "as Renegotiate-Client: the random session ID of crypto/tls's ClientHello, no session offered",
 		"Renegotiate-Client-NoExt-Allowed": "tlsx renegotiates only with peers that support secure renegotiation (RFC 5746); BoringSSL also allows insecure renegotiation when renegotiation is enabled",

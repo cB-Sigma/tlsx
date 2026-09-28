@@ -297,7 +297,7 @@ func ParseSessionState(data []byte) (*SessionState, error) {
 // sessionState returns a partially filled-out [SessionState] with information
 // from the current connection.
 func (c *Conn) sessionState() *SessionState {
-	return &SessionState{
+	return c.x.sessionStateX(&SessionState{ // tlsx: PSK binding (x_psk_resume.go)
 		version:          c.vers,
 		cipherSuite:      c.cipherSuite,
 		createdAt:        uint64(c.config.time().Unix()),
@@ -309,7 +309,7 @@ func (c *Conn) sessionState() *SessionState {
 		extMasterSecret:  c.extMasterSecret,
 		verifiedChains:   c.verifiedChains,
 		curveID:          c.curveID,
-	}
+	}) // tlsx
 }
 
 // EncryptTicket encrypts a ticket with the [Config]'s configured (or default)

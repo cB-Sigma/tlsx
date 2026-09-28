@@ -522,6 +522,9 @@ func (hs *serverHandshakeState) checkForResumption() error {
 	if suite == nil {
 		return nil
 	}
+	if !hs.checkPSKSessionX(sessionState) { // tlsx: PSK sessions (x_psk_resume.go)
+		return nil
+	}
 
 	sessionHasClientCerts := len(sessionState.peerCertificates) != 0
 	needClientCerts := requiresClientCert(c.config.ClientAuth)

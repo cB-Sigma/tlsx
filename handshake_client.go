@@ -427,6 +427,9 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (
 		return nil, nil, nil, nil
 	}
 
+	if b, ok := sessionPSKBinding(session); ok { // tlsx: a PSK session has no certificate
+		return c.loadPSKSessionX(hello, cacheKey, cs, b), nil, nil, nil // tlsx
+	} // tlsx
 	if c.config.time().After(session.peerCertificates[0].NotAfter) {
 		// Expired certificate, delete the entry.
 		c.config.ClientSessionCache.Put(cacheKey, nil)
@@ -1016,6 +1019,7 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 	hs.masterSecret = hs.session.secret
 	c.extMasterSecret = hs.session.extMasterSecret
 	c.peerCertificates = hs.session.peerCertificates
+	c.x.resumedPSKX(hs.session) // tlsx: the PSK identity of a resumed PSK session
 	c.verifiedChains = hs.session.verifiedChains
 	c.ocspResponse = hs.session.ocspResponse
 	// Let the ServerHello SCTs override the session SCTs from the original

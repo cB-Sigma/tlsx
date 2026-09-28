@@ -55,7 +55,8 @@ func xBogoConfig(cfg *Config) {
 		cfg.Ext.PSK = &PSKConfig{
 			// BoringSSL's shim sends its identity as the server's hint, and
 			// as a client expects that hint (or none if it has no identity).
-			Hint: identity,
+			Hint:       identity,
+			Resumption: true,
 			ClientKey: func(hint []byte) ([]byte, []byte, error) {
 				if !bytes.Equal(hint, identity) {
 					return nil, nil, fmt.Errorf("server PSK hint %q, want %q", hint, identity)
