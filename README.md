@@ -70,6 +70,17 @@ misused:
 All of them are off unless you turn them on. Turn on only what your
 protocol requires.
 
+**If you need FIPS 140-3, use crypto/tls in FIPS mode, not tlsx.**
+- Go's FIPS 140-3 mode rests on the Go Cryptographic Module. The module
+  is validated as it ships inside the standard library.
+- A fork outside the standard library can't use its internal packages.
+  tlsx calls the public crypto packages instead and carries its own copy
+  of the TLS key derivation, so tlsx is not FIPS 140-3 validated.
+- Several of tlsx's additions are not FIPS-approved algorithms anyway.
+- Go's GODEBUG settings are read through another internal package, so
+  tlsx keeps them at Go's defaults. Any legacy behaviour it needs is an
+  explicit option in `Config.Ext` instead.
+
 ## What it adds over crypto/tls
 
 With a zero `Config.Ext` and the default cipher suites and groups, tlsx
