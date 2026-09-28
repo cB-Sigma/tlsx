@@ -7,8 +7,8 @@
 package tls13
 
 import (
-	"crypto/internal/fips140/hkdf"
-	"crypto/internal/fips140deps/byteorder"
+	"crypto/hkdf"
+	"encoding/binary"
 	"hash"
 )
 
@@ -30,7 +30,7 @@ func ExpandLabel[H hash.Hash](hash func() H, secret []byte, label string, contex
 		panic("tls13: label or context too long")
 	}
 	hkdfLabel := make([]byte, 0, 2+1+len("tls13 ")+len(label)+1+len(context))
-	hkdfLabel = byteorder.BEAppendUint16(hkdfLabel, uint16(length))
+	hkdfLabel = binary.BigEndian.AppendUint16(hkdfLabel, uint16(length))
 	hkdfLabel = append(hkdfLabel, byte(len("tls13 ")+len(label)))
 	hkdfLabel = append(hkdfLabel, "tls13 "...)
 	hkdfLabel = append(hkdfLabel, label...)
@@ -41,7 +41,6 @@ func ExpandLabel[H hash.Hash](hash func() H, secret []byte, label string, contex
 		panic("tls13: " + err.Error())
 	}
 	return out
-	return hkdf.Expand(hash, secret, string(hkdfLabel), length)
 }
 
 func extract[H hash.Hash](hash func() H, newSecret, currentSecret []byte) []byte {
@@ -53,7 +52,6 @@ func extract[H hash.Hash](hash func() H, newSecret, currentSecret []byte) []byte
 		panic("tls13: " + err.Error())
 	}
 	return prk
-	return hkdf.Extract(hash, newSecret, currentSecret)
 }
 
 func deriveSecret[H hash.Hash](hash func() H, secret []byte, label string, transcript hash.Hash) []byte {

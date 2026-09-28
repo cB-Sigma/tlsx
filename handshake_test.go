@@ -398,17 +398,9 @@ func TestMain(m *testing.M) {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args)
 		flag.PrintDefaults()
-		if *bogoMode {
-			os.Exit(89)
-		}
 	}
 
 	flag.Parse()
-
-	if *bogoMode {
-		bogoShim()
-		os.Exit(0)
-	}
 
 	os.Exit(runMain(m))
 }

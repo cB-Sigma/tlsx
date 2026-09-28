@@ -5,10 +5,7 @@
 package tls12
 
 import (
-	"crypto/internal/fips140"
-	"crypto/internal/fips140/hmac"
-	"crypto/internal/fips140/sha256"
-	"crypto/internal/fips140/sha512"
+	"crypto/hmac"
 	"hash"
 )
 
@@ -27,7 +24,6 @@ func PRF[H hash.Hash](hash func() H, secret []byte, label string, seed []byte, k
 // pHash implements the P_hash function, as defined in RFC 5246, Section 5.
 func pHash[H hash.Hash](hash func() H, result, secret, seed []byte) {
 	h := hmac.New(asHash(hash), secret)
-	h := hmac.New(hash, secret)
 	h.Write(seed)
 	a := h.Sum(nil)
 
@@ -51,22 +47,6 @@ const extendedMasterSecretLabel = "extended master secret"
 // MasterSecret implements the TLS 1.2 extended master secret derivation, as
 // defined in RFC 7627 and allowed by SP 800-135, Revision 1, Section 4.2.2.
 func MasterSecret[H hash.Hash](hash func() H, preMasterSecret, transcript []byte) []byte {
-	// "The TLS 1.2 KDF is an approved KDF when the following conditions are
-	// satisfied: [...] (3) P_HASH uses either SHA-256, SHA-384 or SHA-512."
-	h := hash()
-	switch any(h).(type) {
-	case *sha256.Digest:
-		if h.Size() != 32 {
-			fips140.RecordNonApproved()
-		}
-	case *sha512.Digest:
-		if h.Size() != 46 && h.Size() != 64 {
-			fips140.RecordNonApproved()
-		}
-	default:
-		fips140.RecordNonApproved()
-	}
-
 	return PRF(hash, preMasterSecret, extendedMasterSecretLabel, transcript, masterSecretLength)
 }
 
