@@ -213,8 +213,7 @@ func runWithFIPSEnabled(t *testing.T, testFunc func(t *testing.T)) {
 		}
 	}()
 
-	fips140tls.Force()
-	t.Run("fips140tls", testFunc)
+	t.Run("fips140tls", func(t *testing.T) { t.Skip("tlsx has no FIPS 140 mode") })
 }
 
 func runWithFIPSDisabled(t *testing.T, testFunc func(t *testing.T)) {
@@ -582,7 +581,7 @@ func TestTLSUniqueMatches(t *testing.T) {
 }
 
 func TestVerifyHostname(t *testing.T) {
-	testenv.MustHaveExternalNetwork(t)
+	t.Skip("tlsx: tests do not use the external network")
 
 	c, err := Dial("tcp", "www.google.com:https", nil)
 	if err != nil {
@@ -605,7 +604,7 @@ func TestVerifyHostname(t *testing.T) {
 }
 
 func TestRealResumption(t *testing.T) {
-	testenv.MustHaveExternalNetwork(t)
+	t.Skip("tlsx: tests do not use the external network")
 
 	config := &Config{
 		ServerName:         "yahoo.com",
@@ -2232,6 +2231,9 @@ func TestHandshakeMLKEM(t *testing.T) {
 	baseClientConfig := testConfigClient.Clone()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if strings.HasPrefix(test.name, "GODEBUG") {
+				t.Skip("tlsx ignores GODEBUG")
+			}
 			if fips140tls.Required() && test.expectSelected == X25519 {
 				t.Skip("X25519 not supported in FIPS mode")
 			}
