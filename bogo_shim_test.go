@@ -1,6 +1,7 @@
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+// Changes for tlsx: Copyright 2026 Abhinav Gautam (see NOTICE)
 
 package tlsx
 
@@ -375,6 +376,8 @@ func bogoShim() {
 		}
 	}
 
+	xBogoConfig(cfg) // tlsx: flags for tlsx's features (x_bogo_test.go)
+
 	for i := 0; i < *resumeCount+1; i++ {
 		if i > 0 && *onResumeECHConfigList != nil {
 			cfg.EncryptedClientHelloConfigList = *onResumeECHConfigList
@@ -400,6 +403,8 @@ func bogoShim() {
 			tlsConn = Client(conn, cfg)
 		}
 
+		xBogoAfterHandshake(tlsConn) // tlsx: -export-keying-material
+
 		if i == 0 && *shimWritesFirst {
 			if _, err := tlsConn.Write([]byte("hello")); err != nil {
 				log.Fatalf("write err: %s", err)
@@ -420,6 +425,7 @@ func bogoShim() {
 				break
 			}
 			buf = buf[:n]
+			xBogoAfterRead(tlsConn) // tlsx: -key-update
 			for i := range buf {
 				buf[i] ^= 0xff
 			}
@@ -454,6 +460,7 @@ func bogoShim() {
 		}
 
 		cs := tlsConn.ConnectionState()
+		xBogoCheckState(cs) // tlsx: renegotiation expectations
 		if cs.HandshakeComplete {
 			if *expectALPN != "" && cs.NegotiatedProtocol != *expectALPN {
 				log.Fatalf("unexpected protocol negotiated: want %q, got %q", *expectALPN, cs.NegotiatedProtocol)
@@ -560,6 +567,7 @@ func TestBogoSuite(t *testing.T) {
 	if _, err := os.Stat("bogo_config.json"); err != nil {
 		t.Fatal(err)
 	}
+	xBogoLoadExpected(t) // tlsx: bogo_config_tlsx.json
 
 	var bogoDir string
 	if *bogoLocalDir != "" {
@@ -612,6 +620,8 @@ func TestBogoSuite(t *testing.T) {
 		t.Fatalf("failed to parse results JSON: %s", err)
 	}
 
+	xBogoSummary(t, &results) // tlsx
+
 	if *bogoReport != "" {
 		if err := generateReport(results, *bogoReport); err != nil {
 			t.Fatalf("failed to generate report: %v", err)
@@ -644,6 +654,9 @@ func TestBogoSuite(t *testing.T) {
 	for name, result := range results.Tests {
 		// This is not really the intended way to do this... but... it works?
 		t.Run(name, func(t *testing.T) {
+			if xBogoCheckExpected(t, name, result.Actual) { // tlsx: bogo_config_tlsx.json
+				return // tlsx
+			} // tlsx
 			if result.Actual == "FAIL" && result.IsUnexpected {
 				t.Fail()
 			}
