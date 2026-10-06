@@ -427,15 +427,19 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (
 		return nil, nil, nil, nil
 	}
 
+	bound := false                               // tlsx
 	if b, ok := sessionPSKBinding(session); ok { // tlsx: a PSK session has no certificate
-		return c.loadPSKSessionX(hello, cacheKey, cs, b), nil, nil, nil // tlsx
+		if session.version != VersionTLS13 || !c.loadPSKSession13X(cacheKey, b) { // tlsx: TLS 1.3 in x_psk_resume13.go
+			return c.loadPSKSessionX(hello, cacheKey, cs, b), nil, nil, nil // tlsx
+		} // tlsx
+		bound = true // tlsx
 	} // tlsx
-	if c.config.time().After(session.peerCertificates[0].NotAfter) {
+	if !bound && c.config.time().After(session.peerCertificates[0].NotAfter) { // tlsx: !bound
 		// Expired certificate, delete the entry.
 		c.config.ClientSessionCache.Put(cacheKey, nil)
 		return nil, nil, nil, nil
 	}
-	if !c.config.InsecureSkipVerify {
+	if !c.config.InsecureSkipVerify && !bound { // tlsx: !bound
 		if len(session.verifiedChains) == 0 {
 			// The original connection had InsecureSkipVerify, while this doesn't.
 			return nil, nil, nil, nil
@@ -534,6 +538,9 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (
 	binderKey = earlySecret.ResumptionBinderKey()
 	transcript := cipherSuite.hash.New()
 	if err := computeAndUpdatePSK(hello, binderKey, transcript, cipherSuite.finishedHash); err != nil {
+		return nil, nil, nil, err
+	}
+	if err := c.offerPSKTicketX(hello, session, cipherSuite, binderKey); err != nil { // tlsx: and the external PSK (x_psk_resume13.go)
 		return nil, nil, nil, err
 	}
 

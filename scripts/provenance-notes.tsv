@@ -48,6 +48,9 @@ x_psk_openssl_test.go	(c)	tlsx
 x_psk_test.go	(c)	tlsx
 x_psk_resume.go	(c)	tlsx; loadPSKSessionX adapted from the TLS 1.2 tail of Go's loadSession in handshake_client.go (noted in the file)
 x_psk_resume_test.go	(c)	tlsx
+x_psk_resume13.go	(c)	tlsx; updatePSKBindersX adapted from Go's computeAndUpdatePSK in handshake_client.go (noted in the file)
+x_psk_resume13_test.go	(c)	tlsx
+x_psk_resume13_openssl_test.go	(c)	tlsx
 x_renegotiation.go	(c)	tlsx; handleHelloRequest adapted from Go's handleRenegotiation in conn.go (noted in the file)
 x_rpk.go	(c)	tlsx; short passages from processCertsFromClient, verifyServerCertificate and certificateMsg in Go's crypto/tls (noted in the file)
 x_sha1.go	(c)	tlsx

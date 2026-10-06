@@ -308,6 +308,7 @@ func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 			break
 		}
 	}
+	modeOK = modeOK || hs.pskPlainResumptionOK() // tlsx: psk_ke for sessions of external PSKs
 	if !modeOK {
 		return nil
 	}
@@ -348,6 +349,9 @@ func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 		}
 
 		if sessionState.version != VersionTLS13 {
+			continue
+		}
+		if !hs.checkPSKSession13X(sessionState) { // tlsx: sessions of external PSKs (x_psk_resume13.go)
 			continue
 		}
 
@@ -426,6 +430,7 @@ func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 			}
 		}
 
+		hs.resumedPSKSession13X(sessionState) // tlsx
 		c.didResume = true
 		c.peerCertificates = sessionState.peerCertificates
 		c.ocspResponse = sessionState.ocspResponse
@@ -961,7 +966,7 @@ func (hs *serverHandshakeStateTLS13) shouldSendSessionTickets() bool {
 	}
 
 	// Don't send tickets the client wouldn't use. See RFC 8446, Section 4.2.9.
-	return slices.Contains(hs.clientHello.pskModes, pskModeDHE)
+	return slices.Contains(hs.clientHello.pskModes, pskModeDHE) || hs.pskPlainTicketsX() // tlsx: psk_ke sessions of external PSKs
 }
 
 func (hs *serverHandshakeStateTLS13) sendSessionTickets() error {
@@ -998,7 +1003,7 @@ func (c *Conn) sendSessionTicket(earlyData bool, extra [][]byte) error {
 	state := c.sessionState()
 	state.secret = psk
 	state.EarlyData = earlyData
-	state.Extra = extra
+	state.Extra = append(state.Extra, extra...) // tlsx: keep the PSK binding
 	if c.config.WrapSession != nil {
 		var err error
 		m.label, err = c.config.WrapSession(c.connectionStateLocked(), state)

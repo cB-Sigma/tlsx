@@ -3,6 +3,33 @@
 All notable changes to tlsx. Versions follow semantic versioning; before
 v1.0.0, minor versions may change the API.
 
+## v0.5.0 (unreleased)
+
+- **TLS 1.3 resumption of external-PSK sessions** with
+  `PSKConfig.Resumption` (and `TLS13`), in both roles (RFC 8446 2.2,
+  4.6.1). After an external-PSK handshake the server sends a
+  NewSessionTicket; the client resumes with the resumption PSK.
+  - Sessions are bound to their external PSK as TLS 1.2 PSK sessions are:
+    the client checks `Identity` and `Key`, the server calls `Lookup`, and
+    a removed or changed key ends the resumption of its sessions (the
+    client drops them from its cache).
+  - The client offers the ticket first and its external identity second,
+    each with its own binder (resumption and external binder keys), so a
+    server that cannot resume the ticket takes the external PSK without
+    another round trip. The external identity's obfuscated_ticket_age is
+    0, also after a HelloRetryRequest. A tlsx server tries tickets before
+    external identities. With Encrypted Client Hello only the ticket is
+    offered, in the inner ClientHello.
+  - psk_ke on resumption follows `AllowNoDHE` and `PreferNoDHE`;
+    certificate sessions are still resumed with psk_dhe_ke only.
+  - **Behaviour change:** a Config with `Resumption` and `TLS13` set now
+    sends and uses TLS 1.3 tickets for external-PSK handshakes; before,
+    `Resumption` covered TLS 1.2 only. Leave `Resumption` off to keep every
+    PSK handshake a full one.
+  - Tested Go to Go and against OpenSSL 3.6.4 (`s_client`/`s_server` with
+    `-psk` and `-sess_out`/`-sess_in`) in both roles and both modes. BoGo
+    results are unchanged (BoGo has no TLS 1.3 external-PSK tests).
+
 ## v0.4.0 (2026-09-28)
 
 - **`Config.Ext.MinKeyUpdateInterval`** accepts a TLS 1.3 peer's timed

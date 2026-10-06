@@ -46,7 +46,7 @@ tlsx is that fork, kept as close to Go as possible:
 | | crypto/tls (Go 1.27) | tlsx |
 |---|---|---|
 | TLS 1.2 / 1.3, ECDHE, modern AEADs, ECH, QUIC, ML-KEM | yes | yes (Go's code) |
-| Pre-shared keys, TLS 1.2 PSK suites and TLS 1.3 external PSK | no | yes, with TLS 1.2 PSK session resumption |
+| Pre-shared keys, TLS 1.2 PSK suites and TLS 1.3 external PSK | no | yes, with session resumption bound to the PSK (TLS 1.2 and 1.3) |
 | Raw public keys (RFC 7250) | no | yes |
 | TLS 1.2 renegotiation | client may accept only | client and server, RFC 5746 required |
 | TLS 1.3 key update | answers the peer's | also sends on demand; also accepts a peer's timed updates on idle links, opt-in |
@@ -93,6 +93,7 @@ behaves like crypto/tls of its base Go release. Every addition is opt-in:
   - For old devices, the legacy HMAC-SHA-1 CBC suites of RFC 4279 and RFC 5489 (`TLS_PSK_WITH_AES_128_CBC_SHA` and the like), also in TLS 1.0 and 1.1.
   - TLS 1.2 PSK session resumption (`PSKConfig.Resumption`), by ticket or session ID, bound to the PSK: a removed or changed key ends it.
   - TLS 1.3 external PSKs (RFC 8446 4.2.11) with psk_dhe_ke and, optionally, psk_ke.
+  - TLS 1.3 resumption of external-PSK sessions (`PSKConfig.Resumption` with `TLS13`; RFC 8446 2.2, 4.6.1), in both modes and bound to the PSK like TLS 1.2's. The client offers the ticket first and its external identity second, so a server that cannot resume the ticket still takes the PSK in the same round trip; not the external identity with ECH.
   - No certificate needed.
 - **Raw public keys** (RFC 7250). TLS 1.2 and 1.3, both directions, trusted through a pinning callback.
 - **TLS 1.2 secure renegotiation** (RFC 5746) in both roles, and TLS 1.2 resumption by session ID.
@@ -134,7 +135,6 @@ The package documentation ([doc.go](doc.go)) has the details and the API.
 
 Things tlsx does not do:
 - FIPS 140-3 mode;
-- TLS 1.3 resumption of sessions made with an external PSK;
 - 0-RTT (early data), as crypto/tls.
 
 Example uses: IEC 62351-3 profiles for DNP3, IEC 60870-5-104 and
@@ -326,6 +326,7 @@ the last local run.
 | Legacy SHA-1 CBC PSK suites in TLS 1.0 and 1.1 (three suites) | OpenSSL 3.6.4 | both roles |
 | SHA-1 signatures in TLS 1.2 (`AllowSHA1Signatures`), client certificates, refusal without it | OpenSSL 3.6.4 (security level 0, RSA+SHA1 only) | both roles |
 | TLS 1.3 external PSK, psk_dhe_ke and psk_ke | OpenSSL 3.6.4 | both roles |
+| TLS 1.3 resumption of external-PSK sessions, psk_dhe_ke and psk_ke; the ticket and the external identity offered together, by either side; fallback to the external PSK when the ticket is not accepted; refusal after the server's key changed | OpenSSL 3.6.4 (`-psk`, `-sess_out`/`-sess_in`) | both roles |
 | Raw public keys, TLS 1.2 and 1.3, pinning refusals | OpenSSL 3.6.4 and GnuTLS 3.8.13 | both roles, both implementations |
 | AES-CCM (internal/ccm) | RFC 3610 vectors; one value from Python cryptography | n/a |
 | brainpool ECDH | RFC 7027 Appendix A vectors | n/a |
@@ -343,6 +344,12 @@ the last local run.
 - **TLS 1.2 PSK session resumption** (tickets and session IDs, refusal
   after a key is removed or changed); BoGo's PSK cipher-suite tests also
   resume against BoringSSL's runner.
+- **TLS 1.3 external-PSK resumption details**: obfuscated ticket ages and
+  binders of both identities, also after a HelloRetryRequest; ticket
+  lifetime on both sides; the client dropping sessions of a changed key or
+  identity; resumption inside Encrypted Client Hello; a server answering a
+  psk_ke-only offer (OpenSSL's s_client always offers psk_dhe_ke too).
+  BoGo has no TLS 1.3 external-PSK tests.
 - **GODEBUG** sources and precedence (environment, build defaults), and
   `tlssha1=1` end to end.
 - **The `revocation` package's refresh, HTTP source, failure policy and

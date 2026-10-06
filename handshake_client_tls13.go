@@ -353,7 +353,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 				return err
 			}
 
-			if err := computeAndUpdatePSK(hello, hs.binderKey, transcript, hs.suite.finishedHash); err != nil {
+			if err := c.x.updatePSKBindersX(hello, hs.binderKey, transcript, hs.suite); err != nil { // tlsx: and an external PSK's binder
 				return err
 			}
 		} else {
@@ -449,7 +449,8 @@ func (hs *clientHandshakeStateTLS13) processServerHello() error {
 		return errors.New("tls: server selected an invalid PSK")
 	}
 
-	if len(hs.hello.pskIdentities) != 1 || hs.session == nil {
+	hs.pickPSKX()                                                                         // tlsx: a ticket or the external PSK after it
+	if len(hs.hello.pskIdentities) != 1 && c.x.pskAlongside == nil || hs.session == nil { // tlsx
 		return c.sendAlert(alertInternalError)
 	}
 	pskSuite := cipherSuiteTLS13ByID(hs.session.cipherSuite)
@@ -467,7 +468,7 @@ func (hs *clientHandshakeStateTLS13) processServerHello() error {
 	c.verifiedChains = hs.session.verifiedChains
 	c.ocspResponse = hs.session.ocspResponse
 	c.scts = hs.session.scts
-	c.externalPSKAccepted() // tlsx: not a resumption
+	c.externalPSKAccepted(hs.session) // tlsx: an external PSK is no resumption
 	return nil
 }
 

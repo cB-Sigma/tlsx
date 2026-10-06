@@ -38,9 +38,9 @@ import (
 // identity, psk_dhe_ke is preferred, and a PSK is meant for one pair of
 // peers. Imported PSKs (RFC 9258) are not implemented.
 //
-// Sessions of TLS 1.2 PSK handshakes are resumed only with
-// PSKConfig.Resumption, bound to their PSK (x_psk_resume.go); sessions of
-// TLS 1.3 external-PSK handshakes are neither resumed nor ticketed.
+// Sessions of PSK handshakes are ticketed and resumed only with
+// PSKConfig.Resumption, bound to their PSK: TLS 1.2 in x_psk_resume.go,
+// TLS 1.3 external PSKs in x_psk_resume13.go.
 
 // TLS 1.2 PSK cipher suites tlsx adds.
 const (
@@ -101,15 +101,20 @@ type PSKConfig struct {
 	// Hash is the TLS 1.3 PSK's hash, crypto.SHA256 (the default) or
 	// crypto.SHA384; only TLS 1.3 suites with that hash can use it.
 	Hash crypto.Hash
-	// Resumption allows TLS 1.2 PSK sessions to be resumed (session tickets
-	// as upstream, session IDs with Config.Ext.ServerSessionCache and
-	// ClientSessionIDs). A session stays bound to its PSK: before resuming
-	// it, a server calls Lookup and a client uses Identity and Key or
-	// ClientKey (with the hint of the session's full handshake), and the
-	// session is resumed only if the identity still has the same key, so
-	// removing or changing a key ends resumption of its sessions. Off:
-	// every PSK handshake is a full one. TLS 1.3 sessions of external-PSK
-	// handshakes are not resumed.
+	// Resumption allows the sessions of PSK handshakes to be resumed: TLS
+	// 1.2 PSK sessions by session ticket as upstream, or by session ID with
+	// Config.Ext.ServerSessionCache and ClientSessionIDs; with TLS13, TLS
+	// 1.3 sessions of external-PSK handshakes by NewSessionTicket and the
+	// resumption PSK (RFC 8446 4.6.1). A session stays bound to its PSK:
+	// before resuming it, a server calls Lookup and a client uses Identity
+	// and Key (TLS 1.2: or ClientKey, with the hint of the session's full
+	// handshake), and the session is resumed only if the identity still has
+	// the same key, so removing or changing a key ends resumption of its
+	// sessions. A TLS 1.3 client offers the ticket first and its external
+	// identity second (not with ECH), so a server that cannot resume the
+	// ticket can fall back to the external PSK; a server tries tickets
+	// first. psk_ke follows AllowNoDHE and PreferNoDHE on resumption too.
+	// Off: every PSK handshake is a full one, and no tickets are sent.
 	Resumption bool
 
 	// AllowNoDHE allows TLS 1.3 psk_ke, a key exchange without (EC)DHE
@@ -700,6 +705,7 @@ func (c *Conn) loadExternalPSK(hello *clientHelloMsg) (*SessionState, *tls13.Ear
 	if p.AllowNoDHE {
 		hello.pskModes = append(hello.pskModes, pskModePlain)
 	}
+	c.x.pskPlainOffered = p.AllowNoDHE
 	// RFC 8446 4.2.11: an external identity's obfuscated_ticket_age is 0.
 	hello.pskIdentities = []pskIdentity{{label: slices.Clone(p.Identity)}}
 	hello.pskBinders = [][]byte{make([]byte, suite.hash.Size())}
@@ -722,20 +728,26 @@ func (x *connExt) externalPSKAge(hello *clientHelloMsg) {
 	}
 }
 
-// externalPSKAccepted records a TLS 1.3 server's choice of our external
-// PSK: no resumption, the identity in the connection state.
-func (c *Conn) externalPSKAccepted() {
+// externalPSKAccepted records a TLS 1.3 server's choice of a PSK: for our
+// external PSK no resumption, the identity in the connection state and,
+// with Resumption, the binding its tickets carry; for the ticket of a
+// session bound to an external PSK, that session's identity and binding.
+func (c *Conn) externalPSKAccepted(session *SessionState) {
 	if c.x.pskOffered != nil {
 		c.didResume = false
 		c.x.pskIdentity = c.x.pskOffered
+		c.x.bindPSK(c.config.Ext.PSK, c.x.pskOffered, nil, c.config.Ext.PSK.Key)
+		return
 	}
+	c.x.resumedPSKX(session)
 }
 
 // pskOnlyAllowed says a TLS 1.3 client accepts a ServerHello without
-// key_share: psk_ke with our external PSK.
+// key_share: psk_ke, offered with our external PSK or the ticket of a
+// session bound to it.
 func (c *Conn) pskOnlyAllowed(sh *serverHelloMsg) bool {
 	p := c.config.Ext.PSK
-	return c.x.pskOffered != nil && p != nil && p.AllowNoDHE && sh.selectedIdentityPresent && sh.selectedIdentity == 0
+	return c.x.pskPlainOffered && p != nil && p.AllowNoDHE && sh.selectedIdentityPresent
 }
 
 // pskOnlyKeyExchange stands for "no key exchange" (psk_ke): the TLS 1.3
@@ -760,11 +772,12 @@ func (pskOnlyKeyExchange) clientSharedSecret(*keySharePrivateKeys, []byte) ([]by
 //
 // checkExternalPSK is a TLS 1.3 server's check of the client's PSK
 // identities against Config.Ext.PSK. done says it selected one (or
-// failed); otherwise the tickets are tried as upstream.
+// failed); otherwise the tickets are tried as upstream. With Resumption,
+// the tickets are tried first (x_psk_resume13.go).
 func (hs *serverHandshakeStateTLS13) checkExternalPSK() (done bool, err error) {
 	c := hs.c
 	p := c.config.Ext.PSK
-	if !p.serverReady() || !p.TLS13 || c.quic != nil || len(hs.clientHello.pskIdentities) == 0 {
+	if c.x.pskTicketPass || !p.serverReady() || !p.TLS13 || c.quic != nil || len(hs.clientHello.pskIdentities) == 0 {
 		return false, nil
 	}
 	dhe := slices.Contains(hs.clientHello.pskModes, pskModeDHE)
@@ -772,12 +785,18 @@ func (hs *serverHandshakeStateTLS13) checkExternalPSK() (done bool, err error) {
 	if !dhe && !plain {
 		return false, nil
 	}
+	// With Resumption the tickets come first; their check then needs no
+	// second run, so a miss below still ends the PSK checks (done).
+	ticketsTried, err := hs.ticketsBeforeExternalPSK()
+	if err != nil || hs.usingPSK {
+		return true, err
+	}
 	if len(hs.clientHello.pskIdentities) != len(hs.clientHello.pskBinders) {
 		c.sendAlert(alertIllegalParameter)
 		return true, errors.New("tls: invalid or missing PSK binders")
 	}
 	if cipherSuiteTLS13ByID(tls13SuiteForHash(p.hash())).hash != hs.suite.hash {
-		return false, nil
+		return ticketsTried, nil
 	}
 	for i, identity := range hs.clientHello.pskIdentities {
 		if i >= maxClientPSKIdentities {
@@ -816,22 +835,18 @@ func (hs *serverHandshakeStateTLS13) checkExternalPSK() (done bool, err error) {
 		hs.hello.selectedIdentityPresent = true
 		hs.hello.selectedIdentity = uint16(i)
 		c.x.pskIdentity = slices.Clone(identity.label)
-		if !dhe || plain && p.PreferNoDHE {
-			// psk_ke: no key_share in the ServerHello, zeros as the
-			// (EC)DHE input.
-			hs.sharedKey = nil
-			hs.hello.serverShare = keyShare{}
-			c.curveID = 0
-		}
+		c.x.bindPSK(p, identity.label, nil, key)
+		hs.choosePSKModeX(p)
 		return true, nil
 	}
-	return false, nil
+	return ticketsTried, nil
 }
 
 // noSessionCache says the connection's session must not be cached,
 // ticketed or resumed: a raw public key handshake, whose identity a
 // resumption would not carry, or a PSK handshake unless the session is
-// bound to its PSK (PSKConfig.Resumption, TLS 1.2; x_psk_resume.go).
+// bound to its PSK (PSKConfig.Resumption; x_psk_resume.go and
+// x_psk_resume13.go).
 func (x *connExt) noSessionCache() bool {
 	return x.pskIdentity != nil && x.pskBinding == nil || x.peerRawKey || x.ownRawKey
 }

@@ -82,9 +82,11 @@
 //     PSKs (RFC 8446 4.2.11, "ext binder") with psk_dhe_ke and optionally
 //     psk_ke. ConnectionState().Ext.PSKIdentity. The legacy HMAC-SHA-1
 //     CBC suites of RFC 4279 and RFC 5489 are there for old devices, also
-//     in TLS 1.0 and 1.1. TLS 1.2 PSK sessions are resumed with
-//     PSKConfig.Resumption, bound to their key (x_psk_resume.go); TLS 1.3
-//     external-PSK sessions are not.
+//     in TLS 1.0 and 1.1. With PSKConfig.Resumption, PSK sessions are
+//     resumed bound to their key: TLS 1.2 by ticket or session ID
+//     (x_psk_resume.go), TLS 1.3 external-PSK sessions by NewSessionTicket
+//     and the resumption PSK (x_psk_resume13.go; RFC 8446 2.2, 4.6.1),
+//     the ticket offered before the external identity.
 //   - Raw public keys (x_rpk.go; RFC 7250; Config.Ext.RawPublicKeys) in
 //     TLS 1.2 and 1.3, both directions, trusted through a verify callback
 //     (pinning); ConnectionState().Ext.PeerRawPublicKey.
@@ -116,6 +118,5 @@
 //
 // # Not implemented
 //
-// FIPS 140-3 mode, 0-RTT, and TLS 1.3 resumption of sessions made with an
-// external PSK.
+// FIPS 140-3 mode and 0-RTT.
 package tlsx

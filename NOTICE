@@ -63,6 +63,8 @@ The Go Authors (BSD-3-Clause; see NOTICE)":
   src/crypto/tls/handshake_client.go.
 - x_psk_resume.go: loadPSKSessionX, from the TLS 1.2 steps of loadSession in
   src/crypto/tls/handshake_client.go.
+- x_psk_resume13.go: updatePSKBindersX, from computeAndUpdatePSK in
+  src/crypto/tls/handshake_client.go.
 - x_certs.go and internal/brainpool/encoding.go: ASN.1 structures as in
   src/crypto/x509 (pkcs8.go, sec1.go, x509.go: publicKeyInfo); x_certs.go
   also reuses the error text "tls: failed to parse private key" of
