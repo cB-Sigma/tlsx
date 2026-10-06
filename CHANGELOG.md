@@ -3,7 +3,7 @@
 All notable changes to tlsx. Versions follow semantic versioning; before
 v1.0.0, minor versions may change the API.
 
-## v0.5.0 (unreleased)
+## v0.5.0 (2026-10-06)
 
 - **TLS 1.3 resumption of external-PSK sessions** with
   `PSKConfig.Resumption` (and `TLS13`), in both roles (RFC 8446 2.2,
