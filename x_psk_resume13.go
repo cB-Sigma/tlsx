@@ -11,7 +11,7 @@ import (
 	"hash"
 	"slices"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/tls13"
+	"github.com/cB-Sigma/tlsx/internal/tls13"
 )
 
 // Resumption of TLS 1.3 sessions made with an external PSK

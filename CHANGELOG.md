@@ -3,6 +3,14 @@
 All notable changes to tlsx. Versions follow semantic versioning; before
 v1.0.0, minor versions may change the API.
 
+## v0.6.0 (2026-10-11)
+
+- **New module path: `github.com/cB-Sigma/tlsx`.** The repository moved to
+  the cB-Sigma organisation. Change imports from
+  `github.com/cB-Abhinav-Gautam/tlsx` to `github.com/cB-Sigma/tlsx`; the
+  code is the same as v0.5.0. Earlier versions stay available under the
+  old path.
+
 ## v0.5.0 (2026-10-06)
 
 - **TLS 1.3 resumption of external-PSK sessions** with

@@ -16,7 +16,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/testenv"
+	"github.com/cB-Sigma/tlsx/internal/testenv"
 	"io"
 	"net"
 	"os"

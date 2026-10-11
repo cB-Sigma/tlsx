@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/brainpool"
+	"github.com/cB-Sigma/tlsx/internal/brainpool"
 )
 
 // Certificates and keys crypto/x509 does not handle:

@@ -12,7 +12,7 @@ import (
 	"crypto/hmac"
 	"crypto/mlkem"
 	"errors"
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/tls13"
+	"github.com/cB-Sigma/tlsx/internal/tls13"
 	"hash"
 	"io"
 )

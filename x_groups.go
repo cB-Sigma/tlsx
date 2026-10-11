@@ -10,8 +10,8 @@ import (
 	"io"
 	"slices"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/bigmod"
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/brainpool"
+	"github.com/cB-Sigma/tlsx/internal/bigmod"
+	"github.com/cB-Sigma/tlsx/internal/brainpool"
 )
 
 // Key exchange groups tlsx adds: the finite field groups of RFC 7919 (TLS

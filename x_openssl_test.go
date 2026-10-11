@@ -23,7 +23,7 @@ import (
 
 	"golang.org/x/crypto/ocsp"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/testports"
+	"github.com/cB-Sigma/tlsx/internal/testports"
 )
 
 // Interoperability with OpenSSL 3 (s_server and s_client) as an

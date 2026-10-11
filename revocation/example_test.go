@@ -9,8 +9,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/cB-Abhinav-Gautam/tlsx"
-	"github.com/cB-Abhinav-Gautam/tlsx/revocation"
+	"github.com/cB-Sigma/tlsx"
+	"github.com/cB-Sigma/tlsx/revocation"
 )
 
 var deviceCA, rootCA *x509.Certificate // the trusted CAs, loaded elsewhere

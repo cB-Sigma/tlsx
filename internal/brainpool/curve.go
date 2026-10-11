@@ -64,7 +64,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/bigmod"
+	"github.com/cB-Sigma/tlsx/internal/bigmod"
 )
 
 // Curve parameters (RFC 5639 section 3.4, 3.6, 3.7), cross-checked in tests

@@ -20,7 +20,7 @@ import (
 
 	"golang.org/x/crypto/cryptobyte"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/bigmod"
+	"github.com/cB-Sigma/tlsx/internal/bigmod"
 )
 
 // Static Diffie-Hellman (RFC 5246 7.4.7.2, 8.1.2; RFC 5288 suite

@@ -8,8 +8,8 @@ import (
 	"crypto"
 	"crypto/fips140"
 	"crypto/mldsa"
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/cryptotest"
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/testenv"
+	"github.com/cB-Sigma/tlsx/internal/cryptotest"
+	"github.com/cB-Sigma/tlsx/internal/testenv"
 	"strconv"
 	"testing"
 )

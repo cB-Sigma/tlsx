@@ -13,7 +13,7 @@ import (
 	"crypto/mldsa"
 	"crypto/rsa"
 	"crypto/x509"
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/boring"
+	"github.com/cB-Sigma/tlsx/internal/boring"
 )
 
 // These FIPS 140-3 policies allow anything approved by SP 800-140C

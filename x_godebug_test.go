@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/testenv"
+	"github.com/cB-Sigma/tlsx/internal/testenv"
 )
 
 func init() { testenv.GODEBUGChanged = godebugReset }

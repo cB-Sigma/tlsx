@@ -20,7 +20,7 @@ import (
 	"golang.org/x/crypto/cryptobyte"
 	cbasn1 "golang.org/x/crypto/cryptobyte/asn1"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/bigmod"
+	"github.com/cB-Sigma/tlsx/internal/bigmod"
 )
 
 // ---------------------------------------------------------------------------

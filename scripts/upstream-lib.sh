@@ -7,7 +7,7 @@
 # files tlsx carries from a Go release (GOROOT), rewritten, so the result
 # can be compared with this repository.
 
-MODULE="github.com/cB-Abhinav-Gautam/tlsx"
+MODULE="github.com/cB-Sigma/tlsx"
 
 # Upstream crypto/tls files tlsx carries as copies, outside the history
 # filter-upstream.sh makes (adding them to the filter would change every

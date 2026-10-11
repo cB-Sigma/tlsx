@@ -13,7 +13,7 @@ import (
 	"crypto/sha512"
 	"errors"
 	"fmt"
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/tls12"
+	"github.com/cB-Sigma/tlsx/internal/tls12"
 	"hash"
 )
 

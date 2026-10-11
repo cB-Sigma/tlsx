@@ -13,7 +13,7 @@ utility and device-management protocols need these features.
 > ours; [PROVENANCE.md](PROVENANCE.md) does so file by file.
 
 ```
-go get github.com/cB-Abhinav-Gautam/tlsx
+go get github.com/cB-Sigma/tlsx
 ```
 
 Requires Go 1.27.1 or later. The current upstream base is Go 1.27.1.
@@ -147,7 +147,7 @@ tlsx has the same API as crypto/tls. Change the import and set the fields
 of `Config.Ext` that you need:
 
 ```go
-import "github.com/cB-Abhinav-Gautam/tlsx"
+import "github.com/cB-Sigma/tlsx"
 
 // Client: TLS 1.3 with an external pre-shared key, no certificates.
 cfg := &tlsx.Config{
@@ -209,7 +209,7 @@ revocation lists (CRLs, RFC 5280), and works with crypto/tls as well as
 tlsx:
 
 ```go
-import "github.com/cB-Abhinav-Gautam/tlsx/revocation"
+import "github.com/cB-Sigma/tlsx/revocation"
 
 chk, err := revocation.New(revocation.Config{
 	Sources: []revocation.Source{

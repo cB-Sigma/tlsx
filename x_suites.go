@@ -19,7 +19,7 @@ import (
 
 	"golang.org/x/crypto/cryptobyte"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/ccm"
+	"github.com/cB-Sigma/tlsx/internal/ccm"
 )
 
 // Cipher suites tlsx adds. None is used unless Config.CipherSuites (TLS

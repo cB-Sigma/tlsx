@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/brainpool"
+	"github.com/cB-Sigma/tlsx/internal/brainpool"
 )
 
 // Test PKI for the tlsx tests: one RSA CA issuing RSA, ECDSA P-256,

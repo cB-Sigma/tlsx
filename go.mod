@@ -1,4 +1,4 @@
-module github.com/cB-Abhinav-Gautam/tlsx
+module github.com/cB-Sigma/tlsx
 
 go 1.27.1
 

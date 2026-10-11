@@ -18,8 +18,8 @@ import (
 
 	"golang.org/x/crypto/cryptobyte"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/ccm"
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/tls13"
+	"github.com/cB-Sigma/tlsx/internal/ccm"
+	"github.com/cB-Sigma/tlsx/internal/tls13"
 )
 
 // Pre-shared keys.

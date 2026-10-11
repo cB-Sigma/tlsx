@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cB-Abhinav-Gautam/tlsx"
+	"github.com/cB-Sigma/tlsx"
 )
 
 // handshake runs one TLS handshake over loopback TCP and returns the

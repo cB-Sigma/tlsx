@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/cB-Abhinav-Gautam/tlsx"
+	"github.com/cB-Sigma/tlsx"
 )
 
 // A TLS 1.3 connection authenticated with an external pre-shared key

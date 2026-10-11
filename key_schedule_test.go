@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/tls13"
+	"github.com/cB-Sigma/tlsx/internal/tls13"
 	"strings"
 	"testing"
 	"unicode"

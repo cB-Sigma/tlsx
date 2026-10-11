@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cB-Abhinav-Gautam/tlsx/internal/testports"
+	"github.com/cB-Sigma/tlsx/internal/testports"
 )
 
 // Interoperability with GnuTLS (gnutls-serv and gnutls-cli) as a second
